@@ -4,7 +4,7 @@ import {
     getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
     createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
 } from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
+import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
 // Replaced lucide icons with standard icon names for theme consistency
 import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus, X, Store, Trash2 } from 'lucide-react'; 
 
@@ -900,36 +900,39 @@ const App = () => {
         const initializeFirebase = async () => {
             try {
                 setProcessStep('initializing');
-                console.log("Firebase config:", firebaseConfig); // Debug log
-                
                 const app = initializeApp(firebaseConfig);
                 const firestore = getFirestore(app);
                 const authentication = getAuth(app);
                 setDb(firestore);
                 setAuth(authentication);
-                setIsInitializing(false); // Mark Firebase initialization as complete
-                console.log("Firebase initialized successfully"); // Debug log
+                setIsInitializing(false);
+
+                // --- Check if any users exist to determine if first-time setup is needed ---
+                const usersColRef = collection(firestore, `artifacts/${appId}/users`);
+                const userCheckSnapshot = await getDocs(usersColRef);
+                const noUsersExist = userCheckSnapshot.empty;
+                setIsFirstUser(noUsersExist);
+                
+                console.log("Is this the first user signup?", noUsersExist); // Debug log
 
                 // --- User Auth and Role Fetching ---
-                const fetchUserProfile = async (user) => {
+                const fetchUserProfile = async (user, username = null) => {
                     try {
                         if (!user || user.isAnonymous) {
                             setRole(null);
                             setUserStoreId(null);
                             return;
                         }
-
                         setUserId(user.uid);
                         const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
                         const roleSnap = await getDoc(roleDocRef);
-
                         if (roleSnap.exists()) {
                             setRole(roleSnap.data().role);
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
+                            // This logic correctly assigns 'admin' role only during the initial user creation flow
                             const defaultRole = 'admin'; 
-                            // This part handles the very first admin user creation
-                            await setDoc(roleDocRef, { role: defaultRole, username: user.email.split('@')[0] }, { merge: true });
+                            await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
                             setRole(defaultRole);
                             setUserStoreId(null);
                         }
@@ -940,26 +943,23 @@ const App = () => {
 
                 const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
                     try {
-                        console.log("Auth state changed:", user ? "User logged in" : "No user");
-                        
                         if (!user) {
-                            // No user - show login screen
                             setUserId(null);
                             setRole(null);
                             setUserStoreId(null);
+                            // Only show the auth modal if needed. The check for isFirstUser is now done above.
                             setShowAuthModal(true);
                             setProcessStep('authenticating');
-                            setIsAuthReady(true); // ONLY set ready here for logged out state
+                            setIsAuthReady(true);
                             return;
                         }
                         
-                        // User is logged in - fetch their profile
                         setUserId(user.uid);
-                        setShowAuthModal(false); // Hide modal immediately
+                        setShowAuthModal(false);
                         setProcessStep('loading-data');
                         
                         await fetchUserProfile(user);
-                        setIsAuthReady(true); // Set ready AFTER profile is loaded
+                        setIsAuthReady(true);
                         setProcessStep('ready');
                     } catch (error) {
                         handleError(error, 'Authentication State Change');
@@ -969,12 +969,11 @@ const App = () => {
                 return () => unsubscribeAuth();
             } catch (error) {
                 handleError(error, 'Firebase Initialization');
-                // Don't set isAuthReady here - let the auth state handler manage it
             }
         };
 
         initializeFirebase();
-    }, []);
+    }, []); // This hook should only run once on mount
 
     // Network Status Monitoring
     useEffect(() => {
@@ -1598,10 +1597,10 @@ const App = () => {
                                         </button>
                                         {role === 'admin' && (
                                             <button
-                                                onClick={() => { setSelectedStoreId(id); setView('order'); }}
+                                                onClick={() => { setSelectedStoreId(id); setView('admin'); }}
                                                 className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50"
                                             >
-                                                <ShoppingCart className="w-4 h-4 mr-2" /> Admin Order
+                                                <User className="w-4 h-4 mr-2" /> Admin Functions
                                             </button>
                                         )}
                                     </div>
@@ -1642,6 +1641,39 @@ const App = () => {
             </p>
         </div>
     );
+
+    // --- Admin Functions View ---
+    const AdminFunctionsView = () => {
+        const storeName = stores[selectedStoreId] || 'Selected Store';
+        
+        const AdminButton = ({ icon: Icon, label, viewName }) => (
+            <button
+                onClick={() => setView(viewName)}
+                className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl border-l-4 border-orange-600 text-center w-full"
+            >
+                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 mb-3">
+                    <Icon className="w-6 h-6" />
+                </div>
+                <p className="font-display text-lg font-bold text-gray-900">{label}</p>
+            </button>
+        );
+
+        return (
+            <div className="p-4 space-y-6">
+                <div className="text-center p-4 bg-white rounded-xl shadow-lg border-b-4 border-orange-600">
+                    <h2 className="text-2xl font-bold font-display text-gray-900">Admin Functions</h2>
+                    <p className="text-gray-600 text-sm">for {storeName}</p>
+                </div>
+                
+                <div className="grid grid-cols-2 gap-4">
+                    <AdminButton icon={ShoppingCart} label="Order" viewName="order" />
+                    <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" />
+                    <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" />
+                    <AdminButton icon={Store} label="Store Manager" viewName="storemanager" />
+                </div>
+            </div>
+        );
+    };
 
     // --- Navigation Bar (Footer) ---
     const NavBar = ({ currentView }) => (
@@ -1724,6 +1756,9 @@ const App = () => {
 
         // Staff access control is now handled in useEffect above
         switch (view) {
+            case 'admin': // ADD THIS NEW CASE
+                if (!isAdmin) return <HomeView />;
+                return <AdminFunctionsView />;
             case 'storemanager':
                 if (!isAdmin) return <HomeView />;
                 return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
