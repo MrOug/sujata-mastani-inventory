@@ -1105,7 +1105,7 @@ const App = () => {
     }
 
     // If stores haven't loaded yet but user is authenticated, show minimal loading
-    if (Object.keys(stores).length === 0) {
+    if (Object.keys(stores).length === 0 && userId && role) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -1125,7 +1125,8 @@ const App = () => {
             </div>
 
             <div className="space-y-4">
-                {Object.entries(stores).map(([id, name]) => {
+                {Object.entries(stores).length > 0 ? (
+                    Object.entries(stores).map(([id, name]) => {
                         const isAssignedToStore = role === 'admin' || userStoreId === id;
                         
                         if (role === 'staff' && userStoreId !== id) return null;
@@ -1166,9 +1167,34 @@ const App = () => {
                                 </div>
                             </div>
                         );
-                    })}
-                </div>
-            )}
+                    })
+                ) : (
+                    <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 text-center">
+                        <div className="flex flex-col items-center gap-4">
+                            <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600">
+                                <Store className="w-8 h-8" />
+                            </div>
+                            <div>
+                                <h3 className="font-display text-xl font-bold text-gray-900 mb-2">No Stores Found</h3>
+                                <p className="text-gray-600 mb-4">
+                                    {role === 'admin' 
+                                        ? 'Create your first store to get started with inventory management.'
+                                        : 'No stores have been assigned to you yet. Contact your administrator.'
+                                    }
+                                </p>
+                                {role === 'admin' && (
+                                    <button
+                                        onClick={() => setView('storemanager')}
+                                        className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md flex items-center justify-center mx-auto"
+                                    >
+                                        <Store className="w-5 h-5 mr-2" /> Create Store
+                                    </button>
+                                )}
+                            </div>
+                        </div>
+                    </div>
+                )}
+            </div>
             
             <p className="text-xs text-gray-500 pt-4 border-t border-gray-200 mt-4">
                 User ID: {userId || 'N/A'}
