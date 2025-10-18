@@ -908,7 +908,7 @@ const App = () => {
                 setIsInitializing(false);
 
                 // --- Securely check if the app has been set up ---
-                const setupDocRef = doc(firestore, `artifacts/${appId}/public/config`, 'setup_status');
+                const setupDocRef = doc(firestore, `artifacts/${appId}/public`, 'config');
                 const setupDocSnap = await getDoc(setupDocRef);
 
                 // If the setup document does NOT exist, it's the first run.
@@ -1414,7 +1414,7 @@ const App = () => {
                     await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, username: username }, { merge: true });
                     
                     // *** SET THE SETUP COMPLETE FLAG ***
-                    const setupDocRef = doc(db, `artifacts/${appId}/public/config`, 'setup_status');
+                    const setupDocRef = doc(db, `artifacts/${appId}/public`, 'config');
                     await setDoc(setupDocRef, {
                         completed: true,
                         firstAdminId: user.uid,
