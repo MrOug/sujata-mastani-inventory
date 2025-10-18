@@ -1074,9 +1074,46 @@ const App = () => {
         );
     }
 
-    // If stores haven't loaded yet, show minimal loading
+    // If no user is authenticated, show login screen immediately
+    if (!userId || !role) {
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+                <div className="w-full max-w-md">
+                    <div className="bg-white rounded-xl shadow-xl border-t-4 border-orange-600 p-6 text-center">
+                        <h1 className="text-3xl font-bold font-display text-orange-600 mb-2">Sujata Mastani</h1>
+                        <p className="text-gray-600 mb-6">Inventory Management System</p>
+                        <p className="text-gray-700 font-medium mb-4">Please log in or register the Super Admin account to access the app features.</p>
+                        <button
+                            onClick={() => setShowAuthModal(true)}
+                            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition duration-150 shadow-md flex items-center justify-center text-lg font-display"
+                        >
+                            <User className="w-5 h-5 mr-2" /> Log In / Register
+                        </button>
+                    </div>
+                </div>
+                
+                {showAuthModal && (
+                    <AuthModal 
+                        auth={auth} 
+                        onClose={() => setShowAuthModal(false)}
+                        onLoginSuccess={handleAuthSuccess}
+                        isFirstUser={isFirstUser}
+                    />
+                )}
+            </div>
+        );
+    }
+
+    // If stores haven't loaded yet but user is authenticated, show minimal loading
     if (Object.keys(stores).length === 0) {
-        return <LoadingSpinner />;
+        return (
+            <div className="min-h-screen bg-gray-50 flex items-center justify-center">
+                <div className="text-center">
+                    <Loader className="animate-spin w-10 h-10 mb-4 text-orange-600 mx-auto" />
+                    <p className="text-xl font-display text-gray-700">Loading stores...</p>
+                </div>
+            </div>
+        );
     }
 
     // --- Home/Selector View ---
@@ -1087,21 +1124,8 @@ const App = () => {
                 <p className="text-gray-600 text-sm">{role ? `Logged in as ${role.toUpperCase()}. Select your outlet.` : 'Secure Login Required'}</p>
             </div>
 
-            {!role && (
-                <div className="bg-white p-6 rounded-xl shadow-xl border-t-4 border-orange-600 space-y-4">
-                    <p className="text-gray-700 font-medium">Please log in or register the Super Admin account to access the app features.</p>
-                    <button
-                        onClick={() => setShowAuthModal(true)}
-                        className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition duration-150 shadow-md flex items-center justify-center text-lg font-display"
-                    >
-                        <User className="w-5 h-5 mr-2" /> Log In / Register
-                    </button>
-                </div>
-            )}
-
-            {role && (
-                <div className="space-y-4">
-                    {Object.entries(stores).map(([id, name]) => {
+            <div className="space-y-4">
+                {Object.entries(stores).map(([id, name]) => {
                         const isAssignedToStore = role === 'admin' || userStoreId === id;
                         
                         if (role === 'staff' && userStoreId !== id) return null;
@@ -1149,15 +1173,6 @@ const App = () => {
             <p className="text-xs text-gray-500 pt-4 border-t border-gray-200 mt-4">
                 User ID: {userId || 'N/A'}
             </p>
-
-            {showAuthModal && (
-                <AuthModal 
-                    auth={auth} 
-                    onClose={() => setShowAuthModal(false)}
-                    onLoginSuccess={handleAuthSuccess}
-                    isFirstUser={isFirstUser}
-                />
-            )}
         </div>
     );
 
