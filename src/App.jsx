@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
-    getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
+    getAuth, onAuthStateChanged, 
     createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
@@ -762,23 +762,17 @@ const App = () => {
 
             const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
                 if (!user) {
-                    if (initialAuthToken) {
-                        await signInWithCustomToken(authentication, initialAuthToken);
-                    } else {
-                        await signInAnonymously(authentication);
-                    }
+                    // No user logged in - show login modal
+                    setRole(null);
+                    setUserStoreId(null);
+                    setShowAuthModal(true);
+                    setIsAuthReady(true);
                     return; 
                 }
                 
-                if (user.isAnonymous) {
-                    await signOut(authentication);
-                    setRole(null);
-                    setUserStoreId(null);
-                    setShowAuthModal(true); 
-                } else {
-                    setShowAuthModal(false);
-                    fetchUserProfile(user);
-                }
+                // User is logged in
+                setShowAuthModal(false);
+                await fetchUserProfile(user);
                 
                 // IMPORTANT: Set isAuthReady only AFTER authentication status is known
                 setIsAuthReady(true);
