@@ -717,105 +717,182 @@ const App = () => {
     const [view, setView] = useState('home'); 
     const [isSaving, setIsSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
+    
+    // Error Handling State
+    const [error, setError] = useState(null);
+    const [retryCount, setRetryCount] = useState(0);
+    const [isRetrying, setIsRetrying] = useState(false);
+    
+    // Process Flow State
+    const [processStep, setProcessStep] = useState('initializing'); // initializing, authenticating, loading-data, ready, error
 
     // Data State
     const [currentStock, setCurrentStock] = useState(getEmptyStock());
     const [yesterdayStock, setYesterdayStock] = useState(getEmptyStock());
     const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
+    const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
+    
+    // --- Error Handling Utilities ---
+    const handleError = (error, context = 'Unknown') => {
+        console.error(`Error in ${context}:`, error);
+        setError({
+            message: error.message || 'An unexpected error occurred',
+            context,
+            timestamp: new Date().toISOString(),
+            retryable: true
+        });
+        setProcessStep('error');
+    };
+
+    const clearError = () => {
+        setError(null);
+        setRetryCount(0);
+        setIsRetrying(false);
+    };
+
+    const retryOperation = async (operation, maxRetries = 3) => {
+        if (retryCount >= maxRetries) {
+            handleError(new Error('Maximum retry attempts reached'), 'Retry Operation');
+            return false;
+        }
+
+        setIsRetrying(true);
+        setRetryCount(prev => prev + 1);
+        
+        try {
+            await operation();
+            clearError();
+            return true;
+        } catch (error) {
+            if (retryCount < maxRetries - 1) {
+                // Wait before retrying (exponential backoff)
+                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
+                return retryOperation(operation, maxRetries);
+            } else {
+                handleError(error, 'Retry Operation');
+                return false;
+            }
+        } finally {
+            setIsRetrying(false);
+        }
+    };
     
     // No hardcoded stores - only use Firestore data 
 
     // 1. Firebase Initialization and Authentication 
     useEffect(() => {
-        console.log("Firebase config:", firebaseConfig); // Debug log
-        
-        try {
-            const app = initializeApp(firebaseConfig);
-            const firestore = getFirestore(app);
-            const authentication = getAuth(app);
-            setDb(firestore);
-            setAuth(authentication);
-            console.log("Firebase initialized successfully"); // Debug log
-
-            // --- User Auth and Role Fetching ---
-            const fetchUserProfile = async (user) => {
-                if (!user || user.isAnonymous) {
-                    setRole(null);
-                    setUserStoreId(null);
-                    return;
-                }
-
-                setUserId(user.uid);
-                const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
-                const roleSnap = await getDoc(roleDocRef);
-
-                if (roleSnap.exists()) {
-                    setRole(roleSnap.data().role);
-                    setUserStoreId(roleSnap.data().storeId || null);
-                } else {
-                    const defaultRole = 'admin'; 
-                    // Don't set storeId during profile creation - it will be set later when stores are loaded
-                    await setDoc(roleDocRef, { role: defaultRole, email: user.email }, { merge: true });
-                    setRole(defaultRole);
-                    setUserStoreId(null); // Will be set when stores are loaded
-                }
-            };
-
-            const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
-                console.log("Auth state changed:", user ? "User logged in" : "No user");
+        const initializeApp = async () => {
+            try {
+                setProcessStep('initializing');
+                console.log("Firebase config:", firebaseConfig); // Debug log
                 
-                if (!user) {
-                    // No user - show login screen
-                    setUserId(null);
-                    setRole(null);
-                    setUserStoreId(null);
-                    setShowAuthModal(true);
-                    setIsAuthReady(true);
-                    return;
-                }
-                
-                // User is logged in - fetch their profile
-                setUserId(user.uid);
-                setShowAuthModal(false);
-                
-                try {
-                    await fetchUserProfile(user);
-                } catch (error) {
-                    console.error("Error fetching user profile:", error);
-                }
-                
+                const app = initializeApp(firebaseConfig);
+                const firestore = getFirestore(app);
+                const authentication = getAuth(app);
+                setDb(firestore);
+                setAuth(authentication);
+                console.log("Firebase initialized successfully"); // Debug log
+
+                // --- User Auth and Role Fetching ---
+                const fetchUserProfile = async (user) => {
+                    try {
+                        if (!user || user.isAnonymous) {
+                            setRole(null);
+                            setUserStoreId(null);
+                            return;
+                        }
+
+                        setUserId(user.uid);
+                        const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
+                        const roleSnap = await getDoc(roleDocRef);
+
+                        if (roleSnap.exists()) {
+                            setRole(roleSnap.data().role);
+                            setUserStoreId(roleSnap.data().storeId || null);
+                        } else {
+                            const defaultRole = 'admin'; 
+                            // Don't set storeId during profile creation - it will be set later when stores are loaded
+                            await setDoc(roleDocRef, { role: defaultRole, email: user.email }, { merge: true });
+                            setRole(defaultRole);
+                            setUserStoreId(null); // Will be set when stores are loaded
+                        }
+                    } catch (error) {
+                        handleError(error, 'User Profile Fetch');
+                    }
+                };
+
+                const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
+                    try {
+                        console.log("Auth state changed:", user ? "User logged in" : "No user");
+                        
+                        if (!user) {
+                            // No user - show login screen
+                            setUserId(null);
+                            setRole(null);
+                            setUserStoreId(null);
+                            setShowAuthModal(true);
+                            setProcessStep('authenticating');
+                            setIsAuthReady(true);
+                            return;
+                        }
+                        
+                        // User is logged in - fetch their profile
+                        setUserId(user.uid);
+                        setShowAuthModal(false);
+                        setProcessStep('loading-data');
+                        
+                        await fetchUserProfile(user);
+                        setIsAuthReady(true);
+                        setProcessStep('ready');
+                    } catch (error) {
+                        handleError(error, 'Authentication State Change');
+                    }
+                });
+
+                return () => unsubscribeAuth();
+            } catch (error) {
+                handleError(error, 'Firebase Initialization');
                 setIsAuthReady(true);
-            });
+            }
+        };
 
-            return () => unsubscribeAuth();
-        } catch (e) {
-            console.error("Firebase initialization failed:", e);
-            setIsAuthReady(true);
-        }
+        initializeApp();
     }, []); 
 
     // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
     useEffect(() => {
         if (!db || !isAuthReady || !userId || !role) return; // Wait for role to be loaded before fetching stores
 
-        console.log("Starting store fetch - user authenticated with role:", role);
-        const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
-        const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
-            const newStores = {};
-            snapshot.forEach(doc => {
-                newStores[doc.id] = doc.data().name;
-            });
+        const fetchStores = async () => {
+            try {
+                console.log("Starting store fetch - user authenticated with role:", role);
+                const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
+                
+                const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
+                    try {
+                        const newStores = {};
+                        snapshot.forEach(doc => {
+                            newStores[doc.id] = doc.data().name;
+                        });
 
-            console.log("Stores loaded:", Object.keys(newStores).length, "stores");
-            // Always use stores from Firestore, no fallback
-            setStores(newStores);
-        }, (error) => {
-            // This is the error handler for insufficient permissions
-            console.error("Error listening to stores:", error);
-            setStores({}); // No fallback - empty stores list
-        });
+                        console.log("Stores loaded:", Object.keys(newStores).length, "stores");
+                        setStores(newStores);
+                        clearError(); // Clear any previous errors
+                    } catch (error) {
+                        handleError(error, 'Store Data Processing');
+                    }
+                }, (error) => {
+                    handleError(error, 'Store Fetching');
+                    setStores({}); // Set empty stores on error
+                });
 
-        return () => unsubscribeStores();
+                return () => unsubscribeStores();
+            } catch (error) {
+                handleError(error, 'Store Fetch Setup');
+            }
+        };
+
+        fetchStores();
     }, [db, appId, isAuthReady, userId, role]); // Added role to dependencies
 
     // 3. Set default storeId for admins after stores are loaded
@@ -931,27 +1008,29 @@ const App = () => {
 
     // 4. Data Saving (Staff Action)
     const saveStock = async () => {
-        if (!db || !userId || !selectedStoreId) throw new Error("Database or Store not initialized.");
-
-        // Validate stock data
-        const hasValidData = Object.values(currentStock).some(value => value > 0);
-        if (!hasValidData) {
-            throw new Error("Please enter at least one stock item before saving.");
-        }
-
-        // Sanitize stock data - ensure all values are valid numbers
-        const sanitizedStock = {};
-        Object.keys(currentStock).forEach(key => {
-            const value = currentStock[key];
-            sanitizedStock[key] = (typeof value === 'number' && !isNaN(value) && value >= 0) ? value : 0;
-        });
-
-        setIsSaving(true);
-        const date = getTodayDate();
-        const docId = `${selectedStoreId}-${date}`;
-        const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
-
         try {
+            if (!db || !userId || !selectedStoreId) {
+                throw new Error("Database or Store not initialized.");
+            }
+
+            // Validate stock data
+            const hasValidData = Object.values(currentStock).some(value => value > 0);
+            if (!hasValidData) {
+                throw new Error("Please enter at least one stock item before saving.");
+            }
+
+            // Sanitize stock data - ensure all values are valid numbers
+            const sanitizedStock = {};
+            Object.keys(currentStock).forEach(key => {
+                const value = currentStock[key];
+                sanitizedStock[key] = (typeof value === 'number' && !isNaN(value) && value >= 0) ? value : 0;
+            });
+
+            setIsSaving(true);
+            const date = selectedDate; // Use selected date instead of always today
+            const docId = `${selectedStoreId}-${date}`;
+            const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
+
             await setDoc(docRef, {
                 storeId: selectedStoreId,
                 date: date,
@@ -959,9 +1038,11 @@ const App = () => {
                 userId: userId,
                 timestamp: new Date().toISOString()
             });
-        } catch (e) {
-            console.error("Error saving stock:", e);
-            throw e;
+
+            console.log("Stock saved successfully");
+        } catch (error) {
+            handleError(error, 'Stock Saving');
+            throw error; // Re-throw for UI handling
         } finally {
             setIsSaving(false);
         }
@@ -1056,10 +1137,87 @@ const App = () => {
         }
     };
 
+    // --- Error Display Component ---
+    const ErrorDisplay = ({ error, onRetry, onDismiss }) => (
+        <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
+                <div className="bg-white rounded-xl shadow-xl border-t-4 border-red-500 p-6 text-center">
+                    <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 mx-auto mb-4">
+                        <X className="w-8 h-8" />
+                    </div>
+                    <h2 className="text-xl font-bold text-gray-900 mb-2">Something went wrong</h2>
+                    <p className="text-gray-600 mb-4">{error.message}</p>
+                    <div className="text-xs text-gray-500 mb-4">
+                        <p>Context: {error.context}</p>
+                        <p>Time: {new Date(error.timestamp).toLocaleString()}</p>
+                    </div>
+                    <div className="flex gap-3">
+                        {error.retryable && (
+                            <button
+                                onClick={onRetry}
+                                disabled={isRetrying}
+                                className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition duration-150"
+                            >
+                                {isRetrying ? 'Retrying...' : 'Try Again'}
+                            </button>
+                        )}
+                        <button
+                            onClick={onDismiss}
+                            className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150"
+                        >
+                            Dismiss
+                        </button>
+                    </div>
+                </div>
+            </div>
+        </div>
+    );
+
+    // --- Process Flow Display ---
+    const ProcessFlowDisplay = ({ step }) => {
+        const steps = {
+            'initializing': { text: 'Initializing Firebase...', color: 'blue' },
+            'authenticating': { text: 'Please log in to continue', color: 'orange' },
+            'loading-data': { text: 'Loading your data...', color: 'green' },
+            'ready': { text: 'Ready!', color: 'green' },
+            'error': { text: 'Error occurred', color: 'red' }
+        };
+
+        const currentStep = steps[step] || steps['initializing'];
+        
+        return (
+            <div className="fixed top-4 right-4 bg-white rounded-lg shadow-lg border border-gray-200 p-3 z-50">
+                <div className="flex items-center gap-2">
+                    <div className={`w-2 h-2 rounded-full bg-${currentStep.color}-500`}></div>
+                    <span className="text-sm font-medium text-gray-700">{currentStep.text}</span>
+                </div>
+            </div>
+        );
+    };
+
     // --- View Rendering Logic ---
 
+    // Show error screen if there's an error
+    if (error) {
+        return (
+            <>
+                <ProcessFlowDisplay step="error" />
+                <ErrorDisplay 
+                    error={error} 
+                    onRetry={() => retryOperation(() => window.location.reload())}
+                    onDismiss={clearError}
+                />
+            </>
+        );
+    }
+
     if (!isAuthReady) {
-        return <LoadingSpinner />;
+        return (
+            <>
+                <ProcessFlowDisplay step={processStep} />
+                <LoadingSpinner />
+            </>
+        );
     }
 
     // Show loading only for data fetching, not initial setup
@@ -1326,6 +1484,7 @@ const App = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
+            <ProcessFlowDisplay step={processStep} />
             <style>
             {`
                 /* Font imports */
