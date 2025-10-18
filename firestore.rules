@@ -2,35 +2,56 @@ rules_version = '2';
 service cloud.firestore {
   match /databases/{database}/documents {
     
+    // --- Helper Functions ---
     function isAuthenticated() {
       return request.auth != null;
     }
 
-    // Returns true if the user has the 'admin' role
-    function isAdmin() {
-      return isAuthenticated() && get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data.role == 'admin';
+    function getUserData() {
+      // This function securely gets the profile data for the currently logged-in user.
+      return get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data;
     }
-    
-    // --- Data Rules ---
+
+    function isAdmin() {
+      return isAuthenticated() && getUserData().role == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getUserData().role == 'staff';
+    }
+
+    // --- Data Security Rules ---
     match /artifacts/{appId} {
       
-      // Public data is readable by anyone, but only writable by admins
-      // This allows the initial "is setup complete?" check to work without login
-      match /public/{document=**} {
+      // The public config document is readable by anyone to check if setup is done.
+      // Only the first admin can write to it.
+      match /public/config {
         allow read: if true;
         allow write: if isAdmin();
       }
       
-      // User-specific data
-      match /users/{userId}/{document=**} {
-        // Users can only read and write their OWN data.
-        allow read, write: if request.auth.uid == userId;
+      // This matches the "data" document that holds our subcollections.
+      match /public/data {
+
+        // Rules for the 'stores' subcollection (e.g., /public/data/stores/{storeId})
+        match /stores/{storeId} {
+          allow read: if isAuthenticated();    // Any logged-in user can see the store list.
+          allow write: if isAdmin();           // ONLY admins can create or delete stores.
+        }
+
+        // Rules for the 'stock_entries' subcollection (e.g., /public/data/stock_entries/{entryId})
+        match /stock_entries/{entryId} {
+          allow read: if isAuthenticated();    // Any logged-in user can read stock entries (for reports).
+          allow write: if isAdmin() || isStaff(); // BOTH admins and staff can save stock.
+        }
       }
-    }
-    
-    // Deny all other access by default
-    match /{document=**} {
-      allow read, write: if false;
+      
+      // Rules for user-specific private data
+      match /users/{userId}/{documents=**} {
+        // A user can only read or write their OWN data. Admins can also read user profiles.
+        allow read: if request.auth.uid == userId || isAdmin();
+        allow write: if request.auth.uid == userId;
+      }
     }
   }
 }
