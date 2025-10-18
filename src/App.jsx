@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
-    getAuth, onAuthStateChanged, 
+    getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
     createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
 } from 'firebase/auth';
 import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, deleteDoc } from 'firebase/firestore';
@@ -11,8 +11,16 @@ import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus,
 // --- Global Constants and Firebase Setup ---
 
 // These global variables are provided by the canvas environment
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'default-app-id';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : null;
+const appId = typeof __app_id !== 'undefined' ? __app_id : 'sujata-mastani-inventory';
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+    apiKey: "AIzaSyDZt6n1QSGLq_PyLDYQlayFwMK0Qv7gpmE",
+    authDomain: "sujata-inventory.firebaseapp.com",
+    projectId: "sujata-inventory",
+    storageBucket: "sujata-inventory.firebasestorage.app",
+    messagingSenderId: "527916478889",
+    appId: "1:527916478889:web:7043c7d45087ee452bd4b8",
+    measurementId: "G-BC3JXRWDVH"
+};
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
 // The main list of stock items based on your paper and required output format
@@ -379,7 +387,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth }) => {
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving }) => {
     const [status, setStatus] = useState('');
     const [isError, setIsError] = useState(false);
 
@@ -400,25 +408,7 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Closing Stock Entry</h2>
-            
-            {/* Date Selector */}
-            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                <label className="block text-sm font-semibold text-orange-700 mb-2">
-                    Select Date for Stock Entry
-                </label>
-                <input
-                    type="date"
-                    value={selectedDate}
-                    max={getTodayDate()}
-                    onChange={(e) => setSelectedDate(e.target.value)}
-                    className="w-full p-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
-                />
-                <p className="text-xs text-gray-500 mt-2">
-                    💡 Tip: If your store closed after midnight, you can select yesterday's date
-                </p>
-            </div>
-
-            <p className="text-sm text-gray-600">Enter the closing stock count for **{storeId}** ({selectedDate}).</p>
+            <p className="text-sm text-gray-600">Enter the current stock count for **{storeId}** ({getTodayDate()}).</p>
 
             <div className="space-y-4">
                 {Object.keys(MASTER_STOCK_LIST).map(category => (
@@ -727,18 +717,13 @@ const App = () => {
     const [view, setView] = useState('home'); 
     const [isSaving, setIsSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
-    const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
 
     // Data State
     const [currentStock, setCurrentStock] = useState(getEmptyStock());
     const [yesterdayStock, setYesterdayStock] = useState(getEmptyStock());
     const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
     
-    // Initial store list for setup fallback (used only if Firestore store collection is empty)
-    const initialStores = {
-        'store-1': 'Venkateshwara Hospitality',
-        'store-2': 'Kumar Parisar',
-    }; 
+    // No hardcoded stores - only use Firestore data 
 
     // 1. Firebase Initialization and Authentication 
     useEffect(() => {
@@ -772,7 +757,7 @@ const App = () => {
                 } else {
                     const defaultRole = 'admin'; 
                     // Set default store ID after stores have been loaded
-                    const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : Object.keys(initialStores)[0]; 
+                    const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : null; 
                     await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, email: user.email }, { merge: true });
                     setRole(defaultRole);
                     setUserStoreId(defaultStoreId);
@@ -781,17 +766,20 @@ const App = () => {
 
             const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
                 if (!user) {
-                    // No user logged in - show login modal
-                    setRole(null);
-                    setUserStoreId(null);
-                    setShowAuthModal(true);
+                    // Don't auto-sign in anonymously - let user choose login method
                     setIsAuthReady(true);
-                    return; 
+                    return;
                 }
                 
-                // User is logged in
-                setShowAuthModal(false);
-                await fetchUserProfile(user);
+                if (user.isAnonymous) {
+                    await signOut(authentication);
+                    setRole(null);
+                    setUserStoreId(null);
+                    setShowAuthModal(true); 
+                } else {
+                    setShowAuthModal(false);
+                    fetchUserProfile(user);
+                }
                 
                 // IMPORTANT: Set isAuthReady only AFTER authentication status is known
                 setIsAuthReady(true);
@@ -868,24 +856,20 @@ const App = () => {
     }, [currentStock, calculateSold]);
     
     // 3. Data Fetching (Current & Yesterday's Stock)
-    const fetchStockData = useCallback(async (storeId, dateToFetch) => {
+    const fetchStockData = useCallback(async (storeId) => {
         if (!db || !storeId) return;
 
         setLoadingData(true);
-        const currentDate = dateToFetch || selectedDate;
-        
-        // Calculate yesterday's date based on the selected date
-        const yesterday = new Date(currentDate);
-        yesterday.setDate(yesterday.getDate() - 1);
-        const yesterdayDate = yesterday.toISOString().slice(0, 10);
+        const todayDate = getTodayDate();
+        const yesterdayDate = getYesterdayDate();
 
         try {
-            const currentDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${currentDate}`);
+            const todayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${todayDate}`);
             const yesterdayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${yesterdayDate}`);
 
-            const currentSnap = await getDoc(currentDocRef);
-            if (currentSnap.exists()) {
-                const data = currentSnap.data().stock;
+            const todaySnap = await getDoc(todayDocRef);
+            if (todaySnap.exists()) {
+                const data = todaySnap.data().stock;
                 setCurrentStock(data);
             } else {
                 setCurrentStock(getEmptyStock());
@@ -903,7 +887,7 @@ const App = () => {
         } finally {
             setLoadingData(false);
         }
-    }, [db, selectedDate]);
+    }, [db]);
 
     // Re-fetch data whenever store or auth state changes
     useEffect(() => {
@@ -912,9 +896,9 @@ const App = () => {
         }
 
         if (db && userId && selectedStoreId) {
-            fetchStockData(selectedStoreId, selectedDate);
+            fetchStockData(selectedStoreId);
         }
-    }, [db, userId, selectedStoreId, fetchStockData, role, userStoreId, selectedDate]);
+    }, [db, userId, selectedStoreId, fetchStockData, role, userStoreId]);
 
     // Prevent staff from accessing wrong stores via render-time redirect
     useEffect(() => {
@@ -942,7 +926,7 @@ const App = () => {
         });
 
         setIsSaving(true);
-        const date = selectedDate; // Use selected date instead of always today
+        const date = getTodayDate();
         const docId = `${selectedStoreId}-${date}`;
         const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
@@ -1251,8 +1235,6 @@ const App = () => {
                         setStockData={setCurrentStock}
                         saveStock={saveStock}
                         isSaving={isSaving}
-                        selectedDate={selectedDate}
-                        setSelectedDate={setSelectedDate}
                     />
                 );
             case 'sold':
