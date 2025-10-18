@@ -337,7 +337,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 // --- Admin User Management Component ---
 
 const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('staff');
     const [storeId, setStoreId] = useState(Object.keys(stores)[0]);
@@ -354,18 +354,21 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         }
 
         try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            // Create a fake email from the username for Firebase Auth
+            const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+            const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
             const newUser = userCredential.user;
 
             const userConfigRef = doc(db, `artifacts/${appId}/users/${newUser.uid}/user_config`, 'profile');
+            // Save the actual username in the user's profile
             await setDoc(userConfigRef, {
                 role: role,
                 storeId: storeId,
-                email: email,
+                username: username.trim(),
             }, { merge: true });
 
-            showToast(`User ${email} created successfully with role: ${role} and store: ${stores[storeId]}!`, 'success');
-            setEmail('');
+            showToast(`User ${username} created successfully!`, 'success');
+            setUsername('');
             setPassword('');
         } catch (error) {
             console.error("Error creating user:", error);
@@ -398,11 +401,11 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
             <form onSubmit={handleCreateUser} className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-6 max-w-md mx-auto">
                 <div className="flex flex-col gap-4">
                     <InputField
-                        label="Email"
-                        type="email"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
-                        placeholder="user@outlet.com"
+                        label="Username"
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        placeholder="e.g., staff.kothrud"
                     />
                     <InputField
                         label="Password (Min 6 chars)"
@@ -444,7 +447,6 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                 </button>
             </form>
 
-            {/* Export Data Button */}
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 max-w-md mx-auto">
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Data Export</h3>
                 <p className="text-sm text-gray-600 mb-4">Export current stock data as JSON file for backup or analysis.</p>
@@ -716,7 +718,7 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
 
 const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
     const [isRegister, setIsRegister] = useState(isFirstUser);
-    const [email, setEmail] = useState('');
+    const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
@@ -733,12 +735,14 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
         }
 
         try {
+            // Use a dummy domain for Firebase Auth
+            const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
             if (isRegister) {
-                const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-                onLoginSuccess(userCredential.user);
+                const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
+                onLoginSuccess(userCredential.user, username.trim());
             } else {
-                const userCredential = await signInWithEmailAndPassword(auth, email, password);
-                onLoginSuccess(userCredential.user);
+                const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, password);
+                onLoginSuccess(userCredential.user, username.trim());
             }
         } catch (err) {
             console.error("Auth Error:", err);
@@ -749,21 +753,18 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
     };
 
     return (
-        <Modal title={isRegister ? "Admin Registration" : "Staff/Admin Login"} onClose={onClose}>
+        <Modal title={isRegister ? "Admin Registration" : "Login"} onClose={onClose}>
             <p className="text-sm text-gray-600 mb-6">
-                {isRegister 
-                    ? "Register the first account (Super Admin). Use a secure email and password."
-                    : "Enter your assigned email and password to log in."
-                }
+                {isRegister ? "Register the first Super Admin account." : "Enter your assigned username and password."}
             </p>
             <form onSubmit={handleSubmit} className="space-y-4">
                 <div className="relative">
                     <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" />
                     <input
-                        type="email"
-                        placeholder="Email (User ID)"
-                        value={email}
-                        onChange={(e) => setEmail(e.target.value)}
+                        type="text"
+                        placeholder="Username"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
                         required
                         className="w-full p-3 h-12 border border-gray-300 rounded-lg pl-10 focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
                     />
@@ -797,7 +798,7 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
                 className="w-full mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
                 disabled={isLoading}
             >
-                {isRegister ? "Already have an account? Log In" : "Need to register the first Admin? Sign Up"}
+                {isRegister ? "Already have an account? Log In" : "Need to register first Admin? Sign Up"}
             </button>
         </Modal>
     );
@@ -927,10 +928,10 @@ const App = () => {
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
                             const defaultRole = 'admin'; 
-                            // Don't set storeId during profile creation - it will be set later when stores are loaded
-                            await setDoc(roleDocRef, { role: defaultRole, email: user.email }, { merge: true });
+                            // This part handles the very first admin user creation
+                            await setDoc(roleDocRef, { role: defaultRole, username: user.email.split('@')[0] }, { merge: true });
                             setRole(defaultRole);
-                            setUserStoreId(null); // Will be set when stores are loaded
+                            setUserStoreId(null);
                         }
                     } catch (error) {
                         handleError(error, 'User Profile Fetch');
@@ -1397,7 +1398,7 @@ const App = () => {
         });
     }, []);
 
-    const handleAuthSuccess = (user) => {
+    const handleAuthSuccess = (user, username) => {
         if (user) {
             const fetchProfile = async () => {
                 const roleDocRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
@@ -1408,9 +1409,8 @@ const App = () => {
                     setUserStoreId(roleSnap.data().storeId || null);
                 } else {
                     const defaultRole = 'admin'; 
-                    // Use the first store from the dynamically loaded list for the initial admin
-                    const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : Object.keys(initialStores)[0]; 
-                    await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, email: user.email }, { merge: true });
+                    const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : null;
+                    await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, username: username }, { merge: true });
                     setRole(defaultRole);
                     setUserStoreId(defaultStoreId);
                 }
