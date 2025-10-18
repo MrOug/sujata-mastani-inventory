@@ -16,6 +16,14 @@ service cloud.firestore {
         allow read, write: if isAuthenticated();
       }
       
+      // Public config (setup status)
+      match /public/config/setup_status {
+        // Allow read access to check setup status
+        allow read: if true;
+        // Allow write access for authenticated users (first admin setup)
+        allow write: if isAuthenticated();
+      }
+      
       // User collection - allow read access to check if users exist
       match /users/{userId} {
         // Allow read access to check if any users exist (for first user detection)

@@ -907,13 +907,14 @@ const App = () => {
                 setAuth(authentication);
                 setIsInitializing(false);
 
-                // --- Check if any users exist to determine if first-time setup is needed ---
-                const usersColRef = collection(firestore, `artifacts/${appId}/users`);
-                const userCheckSnapshot = await getDocs(usersColRef);
-                const noUsersExist = userCheckSnapshot.empty;
-                setIsFirstUser(noUsersExist);
-                
-                console.log("Is this the first user signup?", noUsersExist); // Debug log
+                // --- Securely check if the app has been set up ---
+                const setupDocRef = doc(firestore, `artifacts/${appId}/public/config`, 'setup_status');
+                const setupDocSnap = await getDoc(setupDocRef);
+
+                // If the setup document does NOT exist, it's the first run.
+                const isFirstRun = !setupDocSnap.exists();
+                setIsFirstUser(isFirstRun);
+                console.log("Is this the first user signup?", isFirstRun);
 
                 // --- User Auth and Role Fetching ---
                 const fetchUserProfile = async (user, username = null) => {
@@ -930,7 +931,6 @@ const App = () => {
                             setRole(roleSnap.data().role);
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
-                            // This logic correctly assigns 'admin' role only during the initial user creation flow
                             const defaultRole = 'admin'; 
                             await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
                             setRole(defaultRole);
@@ -947,7 +947,6 @@ const App = () => {
                             setUserId(null);
                             setRole(null);
                             setUserStoreId(null);
-                            // Only show the auth modal if needed. The check for isFirstUser is now done above.
                             setShowAuthModal(true);
                             setProcessStep('authenticating');
                             setIsAuthReady(true);
@@ -973,7 +972,7 @@ const App = () => {
         };
 
         initializeFirebase();
-    }, []); // This hook should only run once on mount
+    }, []);
 
     // Network Status Monitoring
     useEffect(() => {
@@ -1407,11 +1406,24 @@ const App = () => {
                     setRole(roleSnap.data().role);
                     setUserStoreId(roleSnap.data().storeId || null);
                 } else {
+                    // This is the first admin registration flow
                     const defaultRole = 'admin'; 
                     const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : null;
+                    
+                    // Create the user profile
                     await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, username: username }, { merge: true });
+                    
+                    // *** SET THE SETUP COMPLETE FLAG ***
+                    const setupDocRef = doc(db, `artifacts/${appId}/public/config`, 'setup_status');
+                    await setDoc(setupDocRef, {
+                        completed: true,
+                        firstAdminId: user.uid,
+                        timestamp: new Date().toISOString()
+                    });
+
                     setRole(defaultRole);
                     setUserStoreId(defaultStoreId);
+                    setIsFirstUser(false); // Update state to prevent future registrations
                 }
                 setShowAuthModal(false);
             };
