@@ -75,9 +75,9 @@ const StockInput = ({ label, value, onChange, placeholder = '0' }) => (
         <input
             type="number"
             min="0"
-            step="1"
+            step="0.01"
             value={value || ''}
-            onChange={(e) => onChange(parseInt(e.target.value) || 0)}
+            onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
             placeholder={placeholder}
             // Removed complex CSS hacks here; relying on global style block
             className="w-1/3 p-2 text-base text-right bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150 shadow-inner"
@@ -106,6 +106,96 @@ const Modal = ({ title, children, onClose }) => (
 );
 
 /**
+ * Toast Notification Component
+ */
+const Toast = ({ message, type = 'success', onClose }) => {
+    const icons = {
+        success: '✓',
+        error: '✗',
+        warning: '⚠',
+        info: 'ℹ'
+    };
+    
+    const colors = {
+        success: 'bg-green-500',
+        error: 'bg-red-500',
+        warning: 'bg-yellow-500',
+        info: 'bg-blue-500'
+    };
+    
+    useEffect(() => {
+        const timer = setTimeout(onClose, 4000);
+        return () => clearTimeout(timer);
+    }, [onClose]);
+    
+    return (
+        <div className="fixed top-4 right-4 z-50 animate-slideInRight">
+            <div className={`${colors[type]} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px] max-w-md`}>
+                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white/20 rounded-full text-xl font-bold">
+                    {icons[type]}
+                </div>
+                <p className="flex-1 font-medium">{message}</p>
+                <button 
+                    onClick={onClose}
+                    className="flex-shrink-0 hover:bg-white/20 rounded p-1 transition"
+                >
+                    <X className="w-5 h-5" />
+                </button>
+            </div>
+        </div>
+    );
+};
+
+/**
+ * Toast Container - manages multiple toasts
+ */
+const ToastContainer = ({ toasts, removeToast }) => {
+    return (
+        <div className="fixed top-4 right-4 z-50 flex flex-col gap-3">
+            {toasts.map((toast) => (
+                <Toast
+                    key={toast.id}
+                    message={toast.message}
+                    type={toast.type}
+                    onClose={() => removeToast(toast.id)}
+                />
+            ))}
+        </div>
+    );
+};
+
+/**
+ * Confirmation Modal Component (replaces browser confirm)
+ */
+const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', confirmColor = 'orange' }) => {
+    const colorClasses = {
+        orange: 'bg-orange-600 hover:bg-orange-700',
+        red: 'bg-red-600 hover:bg-red-700',
+        green: 'bg-green-600 hover:bg-green-700'
+    };
+    
+    return (
+        <Modal title={title} onClose={onCancel}>
+            <p className="text-gray-700 mb-6 text-base leading-relaxed">{message}</p>
+            <div className="flex gap-3">
+                <button
+                    onClick={onCancel}
+                    className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition duration-150"
+                >
+                    {cancelText}
+                </button>
+                <button
+                    onClick={onConfirm}
+                    className={`flex-1 py-3 ${colorClasses[confirmColor]} text-white font-bold rounded-xl transition duration-150 shadow-lg`}
+                >
+                    {confirmText}
+                </button>
+            </div>
+        </Modal>
+    );
+};
+
+/**
  * Loading state component
  */
 const LoadingSpinner = () => (
@@ -131,19 +221,16 @@ const InputField = ({ label, type = 'text', value, onChange, placeholder, minLen
     </label>
 );
 
-const StoreManagementView = ({ db, appId, stores }) => {
+const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     const [newStoreName, setNewStoreName] = useState('');
-    const [message, setMessage] = useState('');
     const [isAdding, setIsAdding] = useState(false);
-    const [storeToDelete, setStoreToDelete] = useState(null); // State for delete confirmation modal
 
     const handleAddStore = async (e) => {
         e.preventDefault();
-        setMessage('');
         setIsAdding(true);
 
         if (!newStoreName.trim()) {
-            setMessage("Error: Store name cannot be empty.");
+            showToast("Store name cannot be empty.", 'error');
             setIsAdding(false);
             return;
         }
@@ -156,31 +243,42 @@ const StoreManagementView = ({ db, appId, stores }) => {
                 createdAt: new Date().toISOString()
             });
 
-            setMessage(`Store "${newStoreName}" added successfully!`);
+            showToast(`Store "${newStoreName}" added successfully!`, 'success');
             setNewStoreName('');
         } catch (error) {
             console.error("Error adding store:", error);
-            setMessage(`Error: Failed to add store: ${error.message}`);
+            showToast(`Failed to add store: ${error.message}`, 'error');
         } finally {
             setIsAdding(false);
         }
     };
 
     const handleDeleteStore = async (storeId, storeName) => {
-        setStoreToDelete(null); // Close the modal immediately
-        setMessage('');
-        
         try {
             const storeDocRef = doc(db, `artifacts/${appId}/public/data/stores`, storeId);
             await deleteDoc(storeDocRef);
 
-            setMessage(`Store "${storeName}" deleted successfully!`);
+            showToast(`Store "${storeName}" deleted successfully!`, 'success');
             
             // Note: Related data (stock entries, user assignments) will be cleaned 
             // up implicitly as the store ID will no longer be valid in the UI lists.
         } catch (error) {
             console.error("Error deleting store:", error);
-            setMessage(`Error: Failed to delete store: ${error.message}`);
+            showToast(`Failed to delete store: ${error.message}`, 'error');
+        }
+    };
+
+    const handleDeleteClick = async (storeId, storeName) => {
+        const confirmed = await showConfirm({
+            title: 'Delete Store',
+            message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            confirmColor: 'red'
+        });
+        
+        if (confirmed) {
+            await handleDeleteStore(storeId, storeName);
         }
     };
 
@@ -210,8 +308,6 @@ const StoreManagementView = ({ db, appId, stores }) => {
                 </button>
             </form>
 
-            {message && <p className={`text-center p-3 rounded-lg text-sm ${message.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{message}</p>}
-        
             {/* --- Current Stores List --- */}
             <div className="pt-4">
                 <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">Current Stores ({Object.keys(stores).length})</h3>
@@ -222,7 +318,7 @@ const StoreManagementView = ({ db, appId, stores }) => {
                             <div className="flex items-center space-x-3">
                                 <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full hidden sm:inline">{id}</span>
                                 <button
-                                    onClick={() => setStoreToDelete({ id, name })}
+                                    onClick={() => handleDeleteClick(id, name)}
                                     className="p-1 rounded-full text-red-600 hover:bg-red-100 transition duration-150"
                                     aria-label={`Delete ${name}`}
                                 >
@@ -233,33 +329,6 @@ const StoreManagementView = ({ db, appId, stores }) => {
                     ))}
                 </ul>
             </div>
-            
-            {/* --- Confirmation Modal --- */}
-            {storeToDelete && (
-                <Modal 
-                    title="Confirm Deletion" 
-                    onClose={() => setStoreToDelete(null)}
-                >
-                    <p className="mb-6 text-gray-700">
-                        Are you sure you want to delete **{storeToDelete.name}**? This action cannot be undone and will remove the store from all lists.
-                        Existing stock and user data assigned to this store will remain in the database but will be unlinked.
-                    </p>
-                    <div className="flex gap-4">
-                        <button
-                            onClick={() => setStoreToDelete(null)}
-                            className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition duration-150"
-                        >
-                            Cancel
-                        </button>
-                        <button
-                            onClick={() => handleDeleteStore(storeToDelete.id, storeToDelete.name)}
-                            className="flex-1 py-3 bg-red-600 hover:bg-red-700 text-white font-bold rounded-xl transition duration-150"
-                        >
-                            Confirm Delete
-                        </button>
-                    </div>
-                </Modal>
-            )}
         </div>
     );
 };
@@ -267,21 +336,19 @@ const StoreManagementView = ({ db, appId, stores }) => {
 
 // --- Admin User Management Component ---
 
-const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData }) => {
+const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('staff');
     const [storeId, setStoreId] = useState(Object.keys(stores)[0]);
-    const [message, setMessage] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
-        setMessage('');
         setIsCreating(true);
 
         if (password.length < 6) {
-             setMessage("Error: Password must be at least 6 characters long.");
+             showToast("Password must be at least 6 characters long.", 'error');
              setIsCreating(false);
              return;
         }
@@ -297,12 +364,12 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData }) =
                 email: email,
             }, { merge: true });
 
-            setMessage(`User ${email} created successfully with role: ${role} and store: ${stores[storeId]}!`);
+            showToast(`User ${email} created successfully with role: ${role} and store: ${stores[storeId]}!`, 'success');
             setEmail('');
             setPassword('');
         } catch (error) {
             console.error("Error creating user:", error);
-            setMessage(`Error: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`);
+            showToast(`Failed to create user: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`, 'error');
         } finally {
             setIsCreating(false);
         }
@@ -377,8 +444,6 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData }) =
                 </button>
             </form>
 
-            {message && <p className={`text-center p-3 rounded-lg text-sm ${message.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{message}</p>}
-            
             {/* Export Data Button */}
             <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 max-w-md mx-auto">
                 <h3 className="text-lg font-bold text-gray-900 mb-3">Data Export</h3>
@@ -399,21 +464,14 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData }) =
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate }) => {
-    const [status, setStatus] = useState('');
-    const [isError, setIsError] = useState(false);
-
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast }) => {
     const handleSave = async () => {
         try {
             await saveStock();
-            setStatus('Stock saved successfully!');
-            setIsError(false);
-            setTimeout(() => setStatus(''), 3000);
+            showToast('Stock saved successfully!', 'success');
         } catch (e) {
-            setStatus(e.message || 'Error saving stock. Please try again.');
-            setIsError(true);
+            showToast(e.message || 'Error saving stock. Please try again.', 'error');
             console.error(e);
-            setTimeout(() => setStatus(''), 5000);
         }
     };
 
@@ -485,13 +543,6 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
                     <><List className="w-6 h-6 mr-2" /> Save Closing Stock</>
                 )}
             </button>
-            {status && (
-                <p className={`text-center p-3 text-sm rounded-lg mt-2 ${
-                    isError ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'
-                }`}>
-                    {status}
-                </p>
-            )}
         </div>
     );
 };
@@ -602,9 +653,9 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
                                         <input
                                             type="number"
                                             min="0"
-                                            step="1"
+                                            step="0.01"
                                             value={orderQuantities[key] || ''}
-                                            onChange={(e) => setOrderQuantities(prev => ({ ...prev, [key]: parseInt(e.target.value) || 0 }))}
+                                            onChange={(e) => setOrderQuantities(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
                                             placeholder="Order"
                                             // Removed complex CSS hacks here; relying on global style block
                                             className="w-1/3 p-2 text-base text-right bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150 shadow-sm"
@@ -753,6 +804,10 @@ const App = () => {
     // UI State
     const [showAuthModal, setShowAuthModal] = useState(false); // Start with auth modal hidden
     const [isFirstUser, setIsFirstUser] = useState(false);
+    
+    // Toast State
+    const [toasts, setToasts] = useState([]);
+    const [confirmDialog, setConfirmDialog] = useState(null);
     
     // App State
     const [selectedStoreId, setSelectedStoreId] = useState(''); 
@@ -1142,14 +1197,13 @@ const App = () => {
             const totalQuantity = Object.values(currentStock).reduce((sum, value) => sum + (value || 0), 0);
 
             // Show confirmation dialog
-            const confirmed = window.confirm(
-                `Confirm Stock Entry:\n\n` +
-                `Store: ${stores[selectedStoreId] || selectedStoreId}\n` +
-                `Date: ${selectedDate}\n` +
-                `Items with stock: ${totalItems}\n` +
-                `Total quantity: ${totalQuantity}\n\n` +
-                `Do you want to save this stock entry?`
-            );
+            const confirmed = await showConfirm({
+                title: 'Confirm Stock Entry',
+                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems with stock: ${totalItems}\nTotal quantity: ${totalQuantity}\n\nDo you want to save this stock entry?`,
+                confirmText: 'Save Stock',
+                cancelText: 'Cancel',
+                confirmColor: 'orange'
+            });
 
             if (!confirmed) {
                 return; // User cancelled
@@ -1159,7 +1213,7 @@ const App = () => {
             const sanitizedStock = {};
             Object.keys(currentStock).forEach(key => {
                 const value = currentStock[key];
-                sanitizedStock[key] = (typeof value === 'number' && !isNaN(value) && value >= 0) ? value : 0;
+                sanitizedStock[key] = (typeof value === 'number' && !isNaN(value) && value >= 0) ? parseFloat(value.toFixed(2)) : 0;
             });
 
             setIsSaving(true);
@@ -1301,6 +1355,32 @@ const App = () => {
             window.location.reload(); 
         }
     };
+
+    // Toast helper functions
+    const showToast = useCallback((message, type = 'success') => {
+        const id = Date.now();
+        setToasts(prev => [...prev, { id, message, type }]);
+    }, []);
+
+    const removeToast = useCallback((id) => {
+        setToasts(prev => prev.filter(toast => toast.id !== id));
+    }, []);
+
+    const showConfirm = useCallback((options) => {
+        return new Promise((resolve) => {
+            setConfirmDialog({
+                ...options,
+                onConfirm: () => {
+                    setConfirmDialog(null);
+                    resolve(true);
+                },
+                onCancel: () => {
+                    setConfirmDialog(null);
+                    resolve(false);
+                }
+            });
+        });
+    }, []);
 
     const handleAuthSuccess = (user) => {
         if (user) {
@@ -1631,10 +1711,10 @@ const App = () => {
         switch (view) {
             case 'storemanager':
                 if (!isAdmin) return <HomeView />;
-                return <StoreManagementView db={db} appId={appId} stores={stores} />;
+                return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
             case 'usermanager':
                 if (!isAdmin) return <HomeView />;
-                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} />;
+                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} />;
             case 'entry':
                 return (
                     <StockEntryView
@@ -1645,6 +1725,7 @@ const App = () => {
                         isSaving={isSaving}
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}
+                        showToast={showToast}
                     />
                 );
             case 'sold':
@@ -1677,6 +1758,10 @@ const App = () => {
             {/* Only show ProcessFlowDisplay when not ready or in error state */}
             {(processStep !== 'ready' || error) && <ProcessFlowDisplay step={processStep} />}
             
+            {/* Toast Container and Confirmation Modal */}
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
+            {confirmDialog && <ConfirmModal {...confirmDialog} />}
+            
             {/* Network Status Banner */}
             {!isOnline && (
                 <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50">
@@ -1704,6 +1789,33 @@ const App = () => {
                 }
                 .animate-fadeIn {
                     animation: fadeIn 0.5s ease-out;
+                }
+                
+                /* Toast Animations */
+                @keyframes slideInRight {
+                    from {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
+                    to {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                }
+
+                .animate-slideInRight {
+                    animation: slideInRight 0.3s ease-out;
+                }
+
+                @keyframes slideOutRight {
+                    from {
+                        transform: translateX(0);
+                        opacity: 1;
+                    }
+                    to {
+                        transform: translateX(400px);
+                        opacity: 0;
+                    }
                 }
                 
                 /* Global Number Input Reset */
