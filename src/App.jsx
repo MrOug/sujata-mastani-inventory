@@ -608,21 +608,26 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
 /**
  * Admin Ordering View
  */
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput }) => {
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast }) => {
     const [showOutputModal, setShowOutputModal] = useState(false);
-    
+
     const handleOutput = () => {
         const output = generateOrderOutput();
-        
-        if (navigator.clipboard.writeText) {
-            navigator.clipboard.writeText(output).then(() => {
-                setShowOutputModal('Order list copied to clipboard!');
-            }).catch(() => {
-                setShowOutputModal('Could not copy to clipboard. Showing in modal instead.');
-            });
-        } else {
-            setShowOutputModal('Could not copy to clipboard. Showing in modal instead.');
+
+        // Fallback for copying to clipboard
+        const textArea = document.createElement("textarea");
+        textArea.value = output;
+        document.body.appendChild(textArea);
+        textArea.focus();
+        textArea.select();
+        try {
+            document.execCommand('copy');
+            showToast('Order list copied to clipboard!', 'success');
+        } catch (err) {
+            showToast('Failed to copy. Please copy manually.', 'error');
         }
+        document.body.removeChild(textArea);
+        setShowOutputModal(true);
     };
 
     return (
@@ -638,12 +643,12 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
                         <div className="space-y-2">
                             {MASTER_STOCK_LIST[category].map(item => {
-                                const key = `${category}-${item}`; 
+                                const key = `${category}-${item}`;
                                 const current = currentStock[key] || 0;
 
                                 return (
-                                    <div 
-                                        key={key} 
+                                    <div
+                                        key={key}
                                         className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200`}
                                     >
                                         <div className="w-1/2">
@@ -676,19 +681,29 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             </button>
 
             {/* Output Modal */}
-            {typeof showOutputModal === 'string' && (
+            {showOutputModal && (
                 <Modal title="Order List Output" onClose={() => setShowOutputModal(false)}>
-                    <p className="text-sm mb-4 text-gray-700">{showOutputModal}</p>
+                    <p className="text-sm mb-4 text-gray-700">The order list has been copied to your clipboard. You can also copy it manually from here.</p>
                     <pre className="p-4 bg-gray-50 text-gray-900 text-sm overflow-x-scroll rounded-lg border border-gray-300 font-mono">{generateOrderOutput()}</pre>
                     <button
                         onClick={() => {
-                            navigator.clipboard.writeText(generateOrderOutput()).then(() => {
-                                setShowOutputModal('Order list copied to clipboard!');
-                            });
+                            const output = generateOrderOutput();
+                            const textArea = document.createElement("textarea");
+                            textArea.value = output;
+                            document.body.appendChild(textArea);
+                            textArea.focus();
+                            textArea.select();
+                            try {
+                                document.execCommand('copy');
+                                showToast('Order list re-copied to clipboard!', 'success');
+                            } catch (err) {
+                                showToast('Failed to copy. Please copy manually.', 'error');
+                            }
+                            document.body.removeChild(textArea);
                         }}
                         className="mt-4 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition duration-200"
                     >
-                        Copy Order
+                        Copy Order Again
                     </button>
                 </Modal>
             )}
@@ -1746,6 +1761,7 @@ const App = () => {
                         orderQuantities={orderQuantities}
                         setOrderQuantities={setOrderQuantities}
                         generateOrderOutput={generateOrderOutput}
+                        showToast={showToast}
                     />
                 );
             default:
