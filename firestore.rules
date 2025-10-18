@@ -1,0 +1,70 @@
+rules_version = '2';
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // Helper function to check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null && !request.auth.token.firebase.sign_in_provider.matches('anonymous');
+    }
+    
+    // Helper function to get user role
+    function getUserRole() {
+      return get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data.role;
+    }
+    
+    // Helper function to check if user is admin
+    function isAdmin() {
+      return isAuthenticated() && getUserRole() == 'admin';
+    }
+    
+    // Helper function to check if user is staff assigned to a specific store
+    function isStaffForStore(storeId) {
+      let userProfile = get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data;
+      return isAuthenticated() && (userProfile.storeId == storeId || userProfile.role == 'admin');
+    }
+    
+    // Artifacts - main app data
+    match /artifacts/{appId} {
+      
+      // Public data (stores and stock entries)
+      match /public/data/{document=**} {
+        // Allow read for authenticated users
+        allow read: if isAuthenticated();
+        
+        // Stores collection
+        match /stores/{storeId} {
+          // Only admins can create, update, or delete stores
+          allow write: if isAdmin();
+        }
+        
+        // Stock entries
+        match /stock_entries/{entryId} {
+          // Allow staff to write to their assigned store, admins can write to all
+          allow write: if isAuthenticated() && (
+            isAdmin() || 
+            isStaffForStore(resource.data.storeId)
+          );
+        }
+      }
+      
+      // User-specific data
+      match /users/{userId} {
+        // Users can read their own data
+        allow read: if isAuthenticated() && request.auth.uid == userId;
+        
+        match /user_config/profile {
+          // Only admins can write user profiles (to assign roles and stores)
+          allow write: if isAdmin();
+          // Users can read their own profile
+          allow read: if isAuthenticated() && request.auth.uid == userId;
+        }
+      }
+    }
+    
+    // Deny all other access by default
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}
+

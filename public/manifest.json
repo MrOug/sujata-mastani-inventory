@@ -1,0 +1,36 @@
+{
+  "name": "Sujata Mastani Inventory",
+  "short_name": "SM Inventory",
+  "description": "Stock management system for Sujata Mastani outlets",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#F8FAFC",
+  "theme_color": "#ea580c",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/icon-192.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "/icon-512.png",
+      "sizes": "512x512",
+      "type": "image/png",
+      "purpose": "any maskable"
+    }
+  ],
+  "categories": ["business", "productivity"],
+  "shortcuts": [
+    {
+      "name": "Stock Entry",
+      "short_name": "Entry",
+      "description": "Enter closing stock",
+      "url": "/?view=entry",
+      "icons": [{ "src": "/icon-192.png", "sizes": "192x192" }]
+    }
+  ]
+}
+
