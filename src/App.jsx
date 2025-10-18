@@ -709,7 +709,7 @@ const App = () => {
     const [stores, setStores] = useState({}); // Dynamic stores state
 
     // UI State
-    const [showAuthModal, setShowAuthModal] = useState(false);
+    const [showAuthModal, setShowAuthModal] = useState(true); // Start with auth modal visible
     const [isFirstUser, setIsFirstUser] = useState(false);
     
     // App State
@@ -1040,7 +1040,7 @@ const App = () => {
 
     // --- View Rendering Logic ---
 
-    if (!isAuthReady || !db) {
+    if (!isAuthReady) {
         return <LoadingSpinner />;
     }
 
