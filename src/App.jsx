@@ -745,13 +745,13 @@ const App = () => {
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(true); // Start as ready to show page immediately
+    const [isAuthReady, setIsAuthReady] = useState(false); // Start as NOT ready
     const [role, setRole] = useState(null); 
     const [userStoreId, setUserStoreId] = useState(null); 
     const [stores, setStores] = useState({}); // Dynamic stores state
 
     // UI State
-    const [showAuthModal, setShowAuthModal] = useState(true); // Start with auth modal visible
+    const [showAuthModal, setShowAuthModal] = useState(false); // Start with auth modal hidden
     const [isFirstUser, setIsFirstUser] = useState(false);
     
     // App State
@@ -878,17 +878,17 @@ const App = () => {
                             setUserStoreId(null);
                             setShowAuthModal(true);
                             setProcessStep('authenticating');
-                            setIsAuthReady(true);
+                            setIsAuthReady(true); // ONLY set ready here for logged out state
                             return;
                         }
                         
                         // User is logged in - fetch their profile
                         setUserId(user.uid);
-                        setShowAuthModal(false);
+                        setShowAuthModal(false); // Hide modal immediately
                         setProcessStep('loading-data');
                         
                         await fetchUserProfile(user);
-                        setIsAuthReady(true);
+                        setIsAuthReady(true); // Set ready AFTER profile is loaded
                         setProcessStep('ready');
                     } catch (error) {
                         handleError(error, 'Authentication State Change');
@@ -898,7 +898,7 @@ const App = () => {
                 return () => unsubscribeAuth();
             } catch (error) {
                 handleError(error, 'Firebase Initialization');
-                setIsAuthReady(true);
+                // Don't set isAuthReady here - let the auth state handler manage it
             }
         };
 
@@ -1399,7 +1399,7 @@ const App = () => {
         );
     }
 
-    if (!isAuthReady || isInitializing) {
+    if (!isAuthReady || processStep === 'initializing') {
         return (
             <>
                 <ProcessFlowDisplay step={processStep} />
