@@ -815,20 +815,12 @@ const App = () => {
                 newStores[doc.id] = doc.data().name;
             });
 
-            if (Object.keys(newStores).length === 0) {
-                // Initialize with default stores if the collection is empty
-                for (const id in initialStores) {
-                    // Use setDoc with a fixed ID to prevent duplication
-                    await setDoc(doc(storesColRef, id), { name: initialStores[id] });
-                }
-                setStores(initialStores);
-            } else {
-                setStores(newStores);
-            }
+            // Always use stores from Firestore, no fallback
+            setStores(newStores);
         }, (error) => {
             // This is the error handler for insufficient permissions
             console.error("Error listening to stores:", error);
-            setStores(initialStores); // Fallback to initial list if permission is denied
+            setStores({}); // No fallback - empty stores list
         });
 
         return () => unsubscribeStores();
