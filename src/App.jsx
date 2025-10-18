@@ -725,6 +725,7 @@ const App = () => {
     
     // Process Flow State
     const [processStep, setProcessStep] = useState('initializing'); // initializing, authenticating, loading-data, ready, error
+    const [storesLoaded, setStoresLoaded] = useState(false); // Track if stores have been attempted to load
 
     // Data State
     const [currentStock, setCurrentStock] = useState(getEmptyStock());
@@ -863,36 +864,34 @@ const App = () => {
     useEffect(() => {
         if (!db || !isAuthReady || !userId || !role) return; // Wait for role to be loaded before fetching stores
 
-        const fetchStores = async () => {
+        console.log("Starting store fetch - user authenticated with role:", role);
+        const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
+        
+        const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
             try {
-                console.log("Starting store fetch - user authenticated with role:", role);
-                const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
-                
-                const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
-                    try {
-                        const newStores = {};
-                        snapshot.forEach(doc => {
-                            newStores[doc.id] = doc.data().name;
-                        });
-
-                        console.log("Stores loaded:", Object.keys(newStores).length, "stores");
-                        setStores(newStores);
-                        clearError(); // Clear any previous errors
-                    } catch (error) {
-                        handleError(error, 'Store Data Processing');
-                    }
-                }, (error) => {
-                    handleError(error, 'Store Fetching');
-                    setStores({}); // Set empty stores on error
+                const newStores = {};
+                snapshot.forEach(doc => {
+                    newStores[doc.id] = doc.data().name;
                 });
 
-                return () => unsubscribeStores();
+                console.log("Stores loaded:", Object.keys(newStores).length, "stores");
+                setStores(newStores);
+                setStoresLoaded(true); // Mark stores as loaded
+                clearError(); // Clear any previous errors
             } catch (error) {
-                handleError(error, 'Store Fetch Setup');
+                handleError(error, 'Store Data Processing');
             }
-        };
+        }, (error) => {
+            console.error("Error listening to stores:", error);
+            handleError(error, 'Store Fetching');
+            setStores({}); // Set empty stores on error
+            setStoresLoaded(true); // Mark stores as loaded even on error
+        });
 
-        fetchStores();
+        return () => {
+            console.log("Unsubscribing from stores listener");
+            unsubscribeStores();
+        };
     }, [db, appId, isAuthReady, userId, role]); // Added role to dependencies
 
     // 3. Set default storeId for admins after stores are loaded
@@ -1263,7 +1262,7 @@ const App = () => {
     }
 
     // If stores haven't loaded yet but user is authenticated, show minimal loading
-    if (Object.keys(stores).length === 0 && userId && role) {
+    if (!storesLoaded && userId && role) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
