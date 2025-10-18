@@ -727,17 +727,15 @@ const App = () => {
 
     // 1. Firebase Initialization and Authentication 
     useEffect(() => {
-        if (!firebaseConfig) {
-            console.error("Firebase config is missing.");
-            return;
-        }
-
+        console.log("Firebase config:", firebaseConfig); // Debug log
+        
         try {
             const app = initializeApp(firebaseConfig);
             const firestore = getFirestore(app);
             const authentication = getAuth(app);
             setDb(firestore);
             setAuth(authentication);
+            console.log("Firebase initialized successfully"); // Debug log
 
             // --- User Auth and Role Fetching ---
             const fetchUserProfile = async (user) => {
