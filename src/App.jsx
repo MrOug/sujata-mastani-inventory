@@ -703,7 +703,7 @@ const App = () => {
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(false);
+    const [isAuthReady, setIsAuthReady] = useState(true); // Start as ready to show page immediately
     const [role, setRole] = useState(null); 
     const [userStoreId, setUserStoreId] = useState(null); 
     const [stores, setStores] = useState({}); // Dynamic stores state
@@ -763,23 +763,28 @@ const App = () => {
             };
 
             const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
+                console.log("Auth state changed:", user ? "User logged in" : "No user");
+                
                 if (!user) {
-                    // Don't auto-sign in anonymously - let user choose login method
+                    // No user - show login screen
+                    setUserId(null);
+                    setRole(null);
+                    setUserStoreId(null);
+                    setShowAuthModal(true);
                     setIsAuthReady(true);
                     return;
                 }
                 
-                if (user.isAnonymous) {
-                    await signOut(authentication);
-                    setRole(null);
-                    setUserStoreId(null);
-                    setShowAuthModal(true); 
-                } else {
-                    setShowAuthModal(false);
-                    fetchUserProfile(user);
+                // User is logged in - fetch their profile
+                setUserId(user.uid);
+                setShowAuthModal(false);
+                
+                try {
+                    await fetchUserProfile(user);
+                } catch (error) {
+                    console.error("Error fetching user profile:", error);
                 }
                 
-                // IMPORTANT: Set isAuthReady only AFTER authentication status is known
                 setIsAuthReady(true);
             });
 
