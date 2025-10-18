@@ -267,7 +267,7 @@ const StoreManagementView = ({ db, appId, stores }) => {
 
 // --- Admin User Management Component ---
 
-const AdminUserManagementView = ({ db, appId, stores, auth }) => {
+const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData }) => {
     const [email, setEmail] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('staff');
@@ -378,6 +378,18 @@ const AdminUserManagementView = ({ db, appId, stores, auth }) => {
             </form>
 
             {message && <p className={`text-center p-3 rounded-lg text-sm ${message.startsWith('Error') ? 'bg-red-100 text-red-700' : 'bg-green-100 text-green-700'}`}>{message}</p>}
+            
+            {/* Export Data Button */}
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 max-w-md mx-auto">
+                <h3 className="text-lg font-bold text-gray-900 mb-3">Data Export</h3>
+                <p className="text-sm text-gray-600 mb-4">Export current stock data as JSON file for backup or analysis.</p>
+                <button
+                    onClick={exportStockData}
+                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/40 transition duration-200 flex items-center justify-center text-lg"
+                >
+                    📊 Export Stock Data
+                </button>
+            </div>
         </div>
     );
 };
@@ -387,7 +399,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth }) => {
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate }) => {
     const [status, setStatus] = useState('');
     const [isError, setIsError] = useState(false);
 
@@ -405,10 +417,40 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving 
         }
     };
 
+    const handleDateChange = (e) => {
+        const newDate = e.target.value;
+        const today = getTodayDate();
+        
+        // Validate that selected date is not in future
+        if (newDate > today) {
+            setStatus('Error: Cannot select future dates');
+            setIsError(true);
+            setTimeout(() => setStatus(''), 3000);
+            return;
+        }
+        
+        setSelectedDate(newDate);
+    };
+
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Closing Stock Entry</h2>
-            <p className="text-sm text-gray-600">Enter the current stock count for **{storeId}** ({getTodayDate()}).</p>
+            <p className="text-sm text-gray-600">Enter the current stock count for **{storeId}**.</p>
+
+            {/* Date Selector */}
+            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                <label className="block text-sm font-medium text-gray-700 mb-2">
+                    Select Date
+                </label>
+                <input
+                    type="date"
+                    value={selectedDate}
+                    max={getTodayDate()}
+                    onChange={handleDateChange}
+                    className="w-full p-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
+                />
+                <p className="text-xs text-gray-500 mt-1">Maximum date: Today ({getTodayDate()})</p>
+            </div>
 
             <div className="space-y-4">
                 {Object.keys(MASTER_STOCK_LIST).map(category => (
@@ -726,6 +768,8 @@ const App = () => {
     // Process Flow State
     const [processStep, setProcessStep] = useState('initializing'); // initializing, authenticating, loading-data, ready, error
     const [storesLoaded, setStoresLoaded] = useState(false); // Track if stores have been attempted to load
+    const [isInitializing, setIsInitializing] = useState(true); // Track Firebase initialization
+    const [isOnline, setIsOnline] = useState(navigator.onLine); // Track network status
 
     // Data State
     const [currentStock, setCurrentStock] = useState(getEmptyStock());
@@ -792,6 +836,7 @@ const App = () => {
                 const authentication = getAuth(app);
                 setDb(firestore);
                 setAuth(authentication);
+                setIsInitializing(false); // Mark Firebase initialization as complete
                 console.log("Firebase initialized successfully"); // Debug log
 
                 // --- User Auth and Role Fetching ---
@@ -858,6 +903,27 @@ const App = () => {
         };
 
         initializeFirebase();
+    }, []);
+
+    // Network Status Monitoring
+    useEffect(() => {
+        const handleOnline = () => {
+            setIsOnline(true);
+            console.log('Network: Online');
+        };
+
+        const handleOffline = () => {
+            setIsOnline(false);
+            console.log('Network: Offline');
+        };
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
     }, []); 
 
     // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
@@ -901,16 +967,34 @@ const App = () => {
                 const defaultStoreId = Object.keys(stores)[0];
                 const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
                 try {
+                    // Try to update existing document first
                     await updateDoc(roleDocRef, { storeId: defaultStoreId });
                     setUserStoreId(defaultStoreId);
                     console.log("Set default storeId for admin:", defaultStoreId);
                 } catch (error) {
-                    console.error("Error setting default storeId:", error);
+                    // If document doesn't exist, create it with setDoc
+                    if (error.code === 'not-found') {
+                        try {
+                            await setDoc(roleDocRef, { 
+                                role: 'admin', 
+                                storeId: defaultStoreId,
+                                email: auth?.currentUser?.email || null
+                            }, { merge: true });
+                            setUserStoreId(defaultStoreId);
+                            console.log("Created profile with default storeId for admin:", defaultStoreId);
+                        } catch (createError) {
+                            console.error("Error creating profile with default storeId:", createError);
+                            handleError(createError, 'Admin Profile Creation');
+                        }
+                    } else {
+                        console.error("Error setting default storeId:", error);
+                        handleError(error, 'Default Store Assignment');
+                    }
                 }
             };
             setDefaultStoreId();
         }
-    }, [role, userStoreId, stores, db, userId, appId]);
+    }, [role, userStoreId, stores, db, userId, appId, auth]);
 
     // Logic to update user's initial store ID if their profile was created before stores loaded
     useEffect(() => {
@@ -918,19 +1002,54 @@ const App = () => {
             // Check if the user's assigned store still exists
             if (!stores[userStoreId]) {
                 const updateStoreId = async () => {
-                    const newStoreId = Object.keys(stores)[0];
-                    const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
                     try {
+                        // Ensure stores array is not empty
+                        const availableStores = Object.keys(stores);
+                        if (availableStores.length === 0) {
+                            console.warn("No stores available for reassignment");
+                            return;
+                        }
+
+                        const newStoreId = availableStores[0];
+                        const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
+                        
+                        // Try to update existing document first
                         await updateDoc(roleDocRef, { storeId: newStoreId });
                         setUserStoreId(newStoreId);
+                        console.log(`Updated user store ID from ${userStoreId} to ${newStoreId}`);
                     } catch (error) {
-                        console.error("Error updating store ID:", error);
+                        // If document doesn't exist, create it with setDoc
+                        if (error.code === 'not-found') {
+                            try {
+                                const availableStores = Object.keys(stores);
+                                if (availableStores.length === 0) {
+                                    console.warn("No stores available for profile creation");
+                                    return;
+                                }
+
+                                const newStoreId = availableStores[0];
+                                const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
+                                await setDoc(roleDocRef, { 
+                                    role: role || 'staff', 
+                                    storeId: newStoreId,
+                                    email: auth?.currentUser?.email || null
+                                }, { merge: true });
+                                setUserStoreId(newStoreId);
+                                console.log(`Created profile with store ID: ${newStoreId}`);
+                            } catch (createError) {
+                                console.error("Error creating profile with new store ID:", createError);
+                                handleError(createError, 'Store Reassignment Profile Creation');
+                            }
+                        } else {
+                            console.error("Error updating store ID:", error);
+                            handleError(error, 'Store Reassignment');
+                        }
                     }
                 };
                 updateStoreId();
             }
         }
-    }, [stores, db, auth, userId, appId]); // Removed userStoreId from deps to prevent loop
+    }, [stores, db, auth, userId, appId, role]); // Added role to dependencies
 
 
     const calculateSold = useCallback((category, item) => {
@@ -1018,6 +1137,24 @@ const App = () => {
                 throw new Error("Please enter at least one stock item before saving.");
             }
 
+            // Count total items with values > 0
+            const totalItems = Object.values(currentStock).filter(value => value > 0).length;
+            const totalQuantity = Object.values(currentStock).reduce((sum, value) => sum + (value || 0), 0);
+
+            // Show confirmation dialog
+            const confirmed = window.confirm(
+                `Confirm Stock Entry:\n\n` +
+                `Store: ${stores[selectedStoreId] || selectedStoreId}\n` +
+                `Date: ${selectedDate}\n` +
+                `Items with stock: ${totalItems}\n` +
+                `Total quantity: ${totalQuantity}\n\n` +
+                `Do you want to save this stock entry?`
+            );
+
+            if (!confirmed) {
+                return; // User cancelled
+            }
+
             // Sanitize stock data - ensure all values are valid numbers
             const sanitizedStock = {};
             Object.keys(currentStock).forEach(key => {
@@ -1046,6 +1183,58 @@ const App = () => {
             setIsSaving(false);
         }
     };
+
+    // 6. Data Export Function (Admin Action)
+    const exportStockData = useCallback(() => {
+        if (role !== 'admin') {
+            handleError(new Error('Only admins can export data'), 'Data Export');
+            return;
+        }
+
+        try {
+            const storeName = stores[selectedStoreId] || selectedStoreId;
+            const exportData = {
+                store: storeName,
+                date: selectedDate,
+                exportTimestamp: new Date().toISOString(),
+                currentStock: currentStock,
+                yesterdayStock: yesterdayStock,
+                calculatedSold: {},
+                summary: {
+                    totalCurrentItems: Object.values(currentStock).filter(v => v > 0).length,
+                    totalCurrentQuantity: Object.values(currentStock).reduce((sum, v) => sum + (v || 0), 0),
+                    totalYesterdayItems: Object.values(yesterdayStock).filter(v => v > 0).length,
+                    totalYesterdayQuantity: Object.values(yesterdayStock).reduce((sum, v) => sum + (v || 0), 0)
+                }
+            };
+
+            // Calculate sold stock for each item
+            Object.keys(MASTER_STOCK_LIST).forEach(category => {
+                MASTER_STOCK_LIST[category].forEach(item => {
+                    const key = `${category}-${item}`;
+                    const current = currentStock[key] || 0;
+                    const yesterday = yesterdayStock[key] || 0;
+                    exportData.calculatedSold[key] = yesterday - current;
+                });
+            });
+
+            // Create and download JSON file
+            const dataStr = JSON.stringify(exportData, null, 2);
+            const dataBlob = new Blob([dataStr], { type: 'application/json' });
+            const url = URL.createObjectURL(dataBlob);
+            const link = document.createElement('a');
+            link.href = url;
+            link.download = `stock-data-${storeName}-${selectedDate}.json`;
+            document.body.appendChild(link);
+            link.click();
+            document.body.removeChild(link);
+            URL.revokeObjectURL(url);
+
+            console.log('Stock data exported successfully');
+        } catch (error) {
+            handleError(error, 'Data Export');
+        }
+    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock]);
 
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
@@ -1210,7 +1399,7 @@ const App = () => {
         );
     }
 
-    if (!isAuthReady) {
+    if (!isAuthReady || isInitializing) {
         return (
             <>
                 <ProcessFlowDisplay step={processStep} />
@@ -1445,7 +1634,7 @@ const App = () => {
                 return <StoreManagementView db={db} appId={appId} stores={stores} />;
             case 'usermanager':
                 if (!isAdmin) return <HomeView />;
-                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} />;
+                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} />;
             case 'entry':
                 return (
                     <StockEntryView
@@ -1454,6 +1643,8 @@ const App = () => {
                         setStockData={setCurrentStock}
                         saveStock={saveStock}
                         isSaving={isSaving}
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
                     />
                 );
             case 'sold':
@@ -1484,6 +1675,14 @@ const App = () => {
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
             <ProcessFlowDisplay step={processStep} />
+            
+            {/* Network Status Banner */}
+            {!isOnline && (
+                <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50">
+                    <span className="text-sm font-medium">⚠️ You are offline. Some features may not work.</span>
+                </div>
+            )}
+            
             <style>
             {`
                 /* Font imports */
@@ -1514,6 +1713,14 @@ const App = () => {
                 }
                 input[type="number"] {
                     -moz-appearance: textfield;
+                    font-size: 16px; /* Prevent iOS zoom on focus */
+                }
+                
+                /* Mobile-specific styles to prevent zoom */
+                @media screen and (max-width: 768px) {
+                    input[type="number"], input[type="date"], input[type="email"], input[type="password"], input[type="text"] {
+                        font-size: 16px !important;
+                    }
                 }
             `}
             </style>
