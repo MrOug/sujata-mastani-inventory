@@ -754,11 +754,10 @@ const App = () => {
                     setUserStoreId(roleSnap.data().storeId || null);
                 } else {
                     const defaultRole = 'admin'; 
-                    // Set default store ID after stores have been loaded
-                    const defaultStoreId = Object.keys(stores).length > 0 ? Object.keys(stores)[0] : null; 
-                    await setDoc(roleDocRef, { role: defaultRole, storeId: defaultStoreId, email: user.email }, { merge: true });
+                    // Don't set storeId during profile creation - it will be set later when stores are loaded
+                    await setDoc(roleDocRef, { role: defaultRole, email: user.email }, { merge: true });
                     setRole(defaultRole);
-                    setUserStoreId(defaultStoreId);
+                    setUserStoreId(null); // Will be set when stores are loaded
                 }
             };
 
@@ -795,10 +794,11 @@ const App = () => {
         }
     }, []); 
 
-    // 2. Real-time Store Fetching (Runs only after DB, Auth, AND user authentication)
+    // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
     useEffect(() => {
-        if (!db || !isAuthReady || !userId) return; // Only fetch stores when user is authenticated
+        if (!db || !isAuthReady || !userId || !role) return; // Wait for role to be loaded before fetching stores
 
+        console.log("Starting store fetch - user authenticated with role:", role);
         const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
         const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
             const newStores = {};
@@ -806,6 +806,7 @@ const App = () => {
                 newStores[doc.id] = doc.data().name;
             });
 
+            console.log("Stores loaded:", Object.keys(newStores).length, "stores");
             // Always use stores from Firestore, no fallback
             setStores(newStores);
         }, (error) => {
@@ -815,8 +816,25 @@ const App = () => {
         });
 
         return () => unsubscribeStores();
-    }, [db, appId, isAuthReady, userId]); // Depend on db, appId, isAuthReady, AND userId
+    }, [db, appId, isAuthReady, userId, role]); // Added role to dependencies
 
+    // 3. Set default storeId for admins after stores are loaded
+    useEffect(() => {
+        if (role === 'admin' && !userStoreId && Object.keys(stores).length > 0 && db && userId) {
+            const setDefaultStoreId = async () => {
+                const defaultStoreId = Object.keys(stores)[0];
+                const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
+                try {
+                    await updateDoc(roleDocRef, { storeId: defaultStoreId });
+                    setUserStoreId(defaultStoreId);
+                    console.log("Set default storeId for admin:", defaultStoreId);
+                } catch (error) {
+                    console.error("Error setting default storeId:", error);
+                }
+            };
+            setDefaultStoreId();
+        }
+    }, [role, userStoreId, stores, db, userId, appId]);
 
     // Logic to update user's initial store ID if their profile was created before stores loaded
     useEffect(() => {
