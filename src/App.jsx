@@ -792,9 +792,9 @@ const App = () => {
         }
     }, []); 
 
-    // 2. Real-time Store Fetching (Runs only after DB and Auth are ready)
+    // 2. Real-time Store Fetching (Runs only after DB, Auth, AND user authentication)
     useEffect(() => {
-        if (!db || !isAuthReady) return;
+        if (!db || !isAuthReady || !userId) return; // Only fetch stores when user is authenticated
 
         const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
         const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
@@ -812,7 +812,7 @@ const App = () => {
         });
 
         return () => unsubscribeStores();
-    }, [db, appId, isAuthReady]); // Depend on db, appId, AND isAuthReady
+    }, [db, appId, isAuthReady, userId]); // Depend on db, appId, isAuthReady, AND userId
 
 
     // Logic to update user's initial store ID if their profile was created before stores loaded
