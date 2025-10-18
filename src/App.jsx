@@ -379,7 +379,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth }) => {
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate }) => {
     const [status, setStatus] = useState('');
     const [isError, setIsError] = useState(false);
 
@@ -400,7 +400,25 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving 
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Closing Stock Entry</h2>
-            <p className="text-sm text-gray-600">Enter the current stock count for **{storeId}** ({getTodayDate()}).</p>
+            
+            {/* Date Selector */}
+            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                <label className="block text-sm font-semibold text-orange-700 mb-2">
+                    Select Date for Stock Entry
+                </label>
+                <input
+                    type="date"
+                    value={selectedDate}
+                    max={getTodayDate()}
+                    onChange={(e) => setSelectedDate(e.target.value)}
+                    className="w-full p-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
+                />
+                <p className="text-xs text-gray-500 mt-2">
+                    💡 Tip: If your store closed after midnight, you can select yesterday's date
+                </p>
+            </div>
+
+            <p className="text-sm text-gray-600">Enter the closing stock count for **{storeId}** ({selectedDate}).</p>
 
             <div className="space-y-4">
                 {Object.keys(MASTER_STOCK_LIST).map(category => (
@@ -709,6 +727,7 @@ const App = () => {
     const [view, setView] = useState('home'); 
     const [isSaving, setIsSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
+    const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
 
     // Data State
     const [currentStock, setCurrentStock] = useState(getEmptyStock());
@@ -857,20 +876,24 @@ const App = () => {
     }, [currentStock, calculateSold]);
     
     // 3. Data Fetching (Current & Yesterday's Stock)
-    const fetchStockData = useCallback(async (storeId) => {
+    const fetchStockData = useCallback(async (storeId, dateToFetch) => {
         if (!db || !storeId) return;
 
         setLoadingData(true);
-        const todayDate = getTodayDate();
-        const yesterdayDate = getYesterdayDate();
+        const currentDate = dateToFetch || selectedDate;
+        
+        // Calculate yesterday's date based on the selected date
+        const yesterday = new Date(currentDate);
+        yesterday.setDate(yesterday.getDate() - 1);
+        const yesterdayDate = yesterday.toISOString().slice(0, 10);
 
         try {
-            const todayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${todayDate}`);
+            const currentDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${currentDate}`);
             const yesterdayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeId}-${yesterdayDate}`);
 
-            const todaySnap = await getDoc(todayDocRef);
-            if (todaySnap.exists()) {
-                const data = todaySnap.data().stock;
+            const currentSnap = await getDoc(currentDocRef);
+            if (currentSnap.exists()) {
+                const data = currentSnap.data().stock;
                 setCurrentStock(data);
             } else {
                 setCurrentStock(getEmptyStock());
@@ -888,7 +911,7 @@ const App = () => {
         } finally {
             setLoadingData(false);
         }
-    }, [db]);
+    }, [db, selectedDate]);
 
     // Re-fetch data whenever store or auth state changes
     useEffect(() => {
@@ -897,9 +920,9 @@ const App = () => {
         }
 
         if (db && userId && selectedStoreId) {
-            fetchStockData(selectedStoreId);
+            fetchStockData(selectedStoreId, selectedDate);
         }
-    }, [db, userId, selectedStoreId, fetchStockData, role, userStoreId]);
+    }, [db, userId, selectedStoreId, fetchStockData, role, userStoreId, selectedDate]);
 
     // Prevent staff from accessing wrong stores via render-time redirect
     useEffect(() => {
@@ -927,7 +950,7 @@ const App = () => {
         });
 
         setIsSaving(true);
-        const date = getTodayDate();
+        const date = selectedDate; // Use selected date instead of always today
         const docId = `${selectedStoreId}-${date}`;
         const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
@@ -1236,6 +1259,8 @@ const App = () => {
                         setStockData={setCurrentStock}
                         saveStock={saveStock}
                         isSaving={isSaving}
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
                     />
                 );
             case 'sold':
