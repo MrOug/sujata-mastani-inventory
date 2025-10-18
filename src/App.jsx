@@ -1674,7 +1674,8 @@ const App = () => {
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
-            <ProcessFlowDisplay step={processStep} />
+            {/* Only show ProcessFlowDisplay when not ready or in error state */}
+            {(processStep !== 'ready' || error) && <ProcessFlowDisplay step={processStep} />}
             
             {/* Network Status Banner */}
             {!isOnline && (
@@ -1735,7 +1736,7 @@ const App = () => {
                             {role.toUpperCase()}
                         </span>
                     )}
-                    {auth && auth.currentUser && !auth.currentUser.isAnonymous && (
+                    {userId && (
                         <button
                             onClick={handleLogout}
                             className="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition duration-150 shadow-md"
