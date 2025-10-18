@@ -781,7 +781,7 @@ const App = () => {
 
     // 1. Firebase Initialization and Authentication 
     useEffect(() => {
-        const initializeApp = async () => {
+        const initializeFirebase = async () => {
             try {
                 setProcessStep('initializing');
                 console.log("Firebase config:", firebaseConfig); // Debug log
@@ -856,7 +856,7 @@ const App = () => {
             }
         };
 
-        initializeApp();
+        initializeFirebase();
     }, []); 
 
     // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
