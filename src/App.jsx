@@ -622,7 +622,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList, hasSaveError }) => {
     const handleSave = async () => {
         try {
             await saveStock();
@@ -701,6 +701,30 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
                     <><List className="w-6 h-6 mr-2" /> Save Closing Stock</>
                 )}
             </button>
+
+            {/* Retry button for connection errors */}
+            {hasSaveError && (
+                <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-xl">
+                    <div className="flex items-center mb-2">
+                        <div className="w-5 h-5 text-red-600 mr-2">⚠️</div>
+                        <p className="text-red-800 font-semibold">Save Failed</p>
+                    </div>
+                    <p className="text-red-700 text-sm mb-3">
+                        There was a connection issue while saving. Your data is backed up locally.
+                    </p>
+                    <button
+                        onClick={handleSave}
+                        disabled={isSaving}
+                        className="w-full py-2 bg-red-600 hover:bg-red-700 text-white font-bold rounded-lg transition duration-200 disabled:opacity-50 flex items-center justify-center"
+                    >
+                        {isSaving ? (
+                            <Loader className="animate-spin w-4 h-4 mr-2" />
+                        ) : (
+                            <><List className="w-4 h-4 mr-2" /> Retry Save</>
+                        )}
+                    </button>
+                </div>
+            )}
         </div>
     );
 };
@@ -986,6 +1010,7 @@ const App = () => {
     const [view, setView] = useState('home'); 
     const [isSaving, setIsSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
+    const [hasSaveError, setHasSaveError] = useState(false);
     
     // Error Handling State
     const [error, setError] = useState(null);
@@ -1136,21 +1161,43 @@ const App = () => {
         const handleOnline = () => {
             setIsOnline(true);
             console.log('Network: Online');
+            showToast('Connection restored!', 'success');
         };
 
         const handleOffline = () => {
             setIsOnline(false);
             console.log('Network: Offline');
+            showToast('Connection lost. Some features may not work.', 'warning');
+        };
+
+        // Check Firestore connection periodically
+        const checkConnection = async () => {
+            if (db && isOnline) {
+                try {
+                    const testDoc = doc(db, '_connection_test', 'ping');
+                    await getDoc(testDoc);
+                    console.log('Firestore connection: OK');
+                } catch (error) {
+                    console.warn('Firestore connection check failed:', error);
+                    if (error.message.includes('NS_BINDING_ABORTED') || error.message.includes('network')) {
+                        showToast('Database connection unstable. Please check your internet.', 'warning');
+                    }
+                }
+            }
         };
 
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
+        
+        // Check connection every 30 seconds
+        const connectionInterval = setInterval(checkConnection, 30000);
 
         return () => {
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
+            clearInterval(connectionInterval);
         };
-    }, []); 
+    }, [db, isOnline, showToast]); 
 
     // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
     useEffect(() => {
@@ -1387,31 +1434,98 @@ const App = () => {
 
             setIsSaving(true);
 
-            // SAVE WITH PERFORMANCE MONITORING
+            // SAVE WITH PERFORMANCE MONITORING AND ENHANCED ERROR HANDLING
             await perfMonitor.measureAsync('saveStock', async () => {
                 const date = selectedDate;
                 const docId = `${selectedStoreId}-${date}`;
                 const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
-                // USE RETRY LOGIC
-                await retryOperation(async () => {
-                    await setDoc(docRef, {
-                        storeId: selectedStoreId,
-                        date: date,
-                        stock: sanitized,
-                        userId: userId,
-                        timestamp: new Date().toISOString()
-                    });
-                });
+                // ENHANCED RETRY LOGIC FOR FIRESTORE CONNECTION ISSUES
+                let lastError;
+                const maxRetries = 5;
+                
+                for (let attempt = 1; attempt <= maxRetries; attempt++) {
+                    try {
+                        console.log(`Save attempt ${attempt}/${maxRetries}`);
+                        
+                        await setDoc(docRef, {
+                            storeId: selectedStoreId,
+                            date: date,
+                            stock: sanitized,
+                            userId: userId,
+                            timestamp: new Date().toISOString()
+                        });
 
-                // BACKUP TO LOCAL STORAGE
-                storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
+                        // BACKUP TO LOCAL STORAGE
+                        storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
+                        
+                        console.log("Stock saved successfully on attempt", attempt);
+                        break; // Success, exit retry loop
+                        
+                    } catch (error) {
+                        lastError = error;
+                        console.warn(`Save attempt ${attempt} failed:`, error);
+                        
+                        // Check if it's a connection-related error
+                        const isConnectionError = 
+                            error.code === 'unavailable' ||
+                            error.code === 'deadline-exceeded' ||
+                            error.code === 'aborted' ||
+                            error.message.includes('NS_BINDING_ABORTED') ||
+                            error.message.includes('network') ||
+                            error.message.includes('timeout') ||
+                            error.message.includes('connection');
+                        
+                        if (!isConnectionError) {
+                            // Non-connection error, don't retry
+                            throw error;
+                        }
+                        
+                        if (attempt < maxRetries) {
+                            // Wait before retrying (exponential backoff)
+                            const delay = Math.pow(2, attempt) * 1000; // 2s, 4s, 8s, 16s
+                            console.log(`Retrying in ${delay}ms...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                        }
+                    }
+                }
+                
+                // If we get here and lastError exists, all retries failed
+                if (lastError) {
+                    throw new Error(`Failed to save after ${maxRetries} attempts. Last error: ${lastError.message}`);
+                }
             });
 
             showToast('Stock saved successfully!', 'success');
+            setHasSaveError(false); // Clear any previous save errors
         } catch (error) {
+            console.error('Stock save error:', error);
+            
+            // Enhanced error messages for different error types
+            let errorMessage = 'Error saving stock';
+            let isConnectionError = false;
+            
+            if (error.message.includes('NS_BINDING_ABORTED') || error.message.includes('network')) {
+                errorMessage = 'Network connection lost. Please check your internet connection and try again.';
+                isConnectionError = true;
+            } else if (error.message.includes('permission-denied')) {
+                errorMessage = 'Permission denied. Please contact your administrator.';
+            } else if (error.message.includes('unauthenticated')) {
+                errorMessage = 'Authentication expired. Please log in again.';
+            } else if (error.message.includes('Failed to save after')) {
+                errorMessage = 'Unable to save due to connection issues. Please try again later.';
+                isConnectionError = true;
+            } else {
+                errorMessage = error.message || 'Unknown error occurred while saving.';
+            }
+            
+            // Set save error state for connection issues
+            if (isConnectionError) {
+                setHasSaveError(true);
+            }
+            
             handleError(error, 'Stock Saving');
-            showToast(error.message || 'Error saving stock', 'error');
+            showToast(errorMessage, 'error');
         } finally {
             setIsSaving(false);
         }
@@ -1964,6 +2078,7 @@ const App = () => {
                         setSelectedDate={setSelectedDate}
                         showToast={showToast}
                         masterStockList={masterStockList}
+                        hasSaveError={hasSaveError}
                     />
                 );
             case 'sold':
