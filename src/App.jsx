@@ -16,6 +16,9 @@ import ToastContainer from './components/ToastContainer';
 import ConfirmModal from './components/ConfirmModal';
 import LoadingSpinner from './components/LoadingSpinner';
 
+// Import constants
+import { INITIAL_STOCK_LIST, FIREBASE_CONFIG, APP_CONFIG, USER_ROLES, VIEWS, TOAST_TYPES, MODAL_COLORS } from './constants';
+
 // Import utility functions
 import { validateStockData, validateUserCredentials, validateStoreData, RateLimiter } from './utils/validation-utils';
 import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils';
@@ -25,37 +28,9 @@ import { perfMonitor, getMemoryInfo, getNetworkSpeed } from './utils/performance
 // --- Global Constants and Firebase Setup ---
 
 // These global variables are provided by the canvas environment
-const appId = typeof __app_id !== 'undefined' ? __app_id : 'sujata-mastani-inventory';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
-    apiKey: "AIzaSyDZt6n1QSGLq_PyLDYQlayFwMK0Qv7gpmE",
-    authDomain: "sujata-inventory.firebaseapp.com",
-    projectId: "sujata-inventory",
-    storageBucket: "sujata-inventory.firebasestorage.app",
-    messagingSenderId: "527916478889",
-    appId: "1:527916478889:web:7043c7d45087ee452bd4b8",
-    measurementId: "G-BC3JXRWDVH"
-};
+const appId = typeof __app_id !== 'undefined' ? __app_id : APP_CONFIG.DEFAULT_APP_ID;
+const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : FIREBASE_CONFIG;
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
-
-// Initial stock list - will be made dynamic
-const INITIAL_STOCK_LIST = {
-  MILKSHAKE: [
-    'Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch',
-    'Kesar Mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)',
-  ],
-  'ICE CREAM': [
-    'Mango', 'Pista', 'Pineapple', 'Vanilla', 'Rose', 'Orange', 'Keshar Pista', 'Chocolate',
-    'Strawberry', 'Butterscotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam',
-    'Chocolate Choco Chips', 'Kaju Draksha', 'Gulkand', 'Jagdalu', 'VOP', 'Peru',
-    'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Mango Bites',
-  ],
-  TOPPINGS: [
-    'Dry Fruit', 'Pista', 'Badam', 'Pista Powder', 'Cherry'
-  ],
-  MISC: [
-    'Ice Cream Dabee', 'Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container'
-  ]
-};
 
 // --- Utility Functions ---
 
@@ -361,7 +336,7 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
 const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
     const [newUsername, setNewUsername] = useState('');
     const [newPassword, setNewPassword] = useState('');
-    const [newUserRole, setNewUserRole] = useState('staff');
+    const [newUserRole, setNewUserRole] = useState(USER_ROLES.STAFF);
     const [storeId, setStoreId] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
@@ -880,7 +855,7 @@ const App = () => {
     
     // App State
     const [selectedStoreId, setSelectedStoreId] = useState(''); 
-    const [view, setView] = useState('home'); 
+    const [view, setView] = useState(VIEWS.HOME); 
     const [isSaving, setIsSaving] = useState(false);
     const [loadingData, setLoadingData] = useState(false);
     const [hasSaveError, setHasSaveError] = useState(false);
@@ -986,7 +961,7 @@ const App = () => {
                             setUserRole(roleSnap.data().role);
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
-                            const defaultRole = 'admin'; 
+                            const defaultRole = USER_ROLES.ADMIN; 
                             await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
                             setUserRole(defaultRole);
                             setUserStoreId(null);
