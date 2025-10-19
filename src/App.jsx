@@ -29,8 +29,8 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
 };
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
-// The main list of stock items based on your paper and required output format
-const MASTER_STOCK_LIST = {
+// Initial stock list - will be made dynamic
+const INITIAL_STOCK_LIST = {
   MILKSHAKE: [
     'Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch',
     'Kesar Mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)',
@@ -51,10 +51,10 @@ const MASTER_STOCK_LIST = {
 
 // --- Utility Functions ---
 
-const getEmptyStock = () => {
+const getEmptyStock = (stockList) => {
   const stock = {};
-  Object.keys(MASTER_STOCK_LIST).forEach(category => {
-    MASTER_STOCK_LIST[category].forEach(item => {
+  Object.keys(stockList).forEach(category => {
+    stockList[category].forEach(item => {
       const key = `${category}-${item}`; 
       stock[key] = 0;
     });
@@ -336,6 +336,160 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 };
 
 
+// --- Stock Item Management Component ---
+
+const StockItemManagementView = ({ masterStockList, setMasterStockList, showToast, showConfirm }) => {
+    const [newItemName, setNewItemName] = useState('');
+    const [selectedCategory, setSelectedCategory] = useState('MILKSHAKE');
+    const [isAdding, setIsAdding] = useState(false);
+
+    const handleAddItem = async (e) => {
+        e.preventDefault();
+        setIsAdding(true);
+
+        try {
+            // VALIDATE ITEM NAME
+            if (!newItemName.trim()) {
+                showToast("Item name cannot be empty.", 'error');
+                setIsAdding(false);
+                return;
+            }
+
+            if (newItemName.trim().length > 100) {
+                showToast("Item name too long (max 100 characters).", 'error');
+                setIsAdding(false);
+                return;
+            }
+
+            const sanitizedName = newItemName.trim().replace(/\s+/g, ' ');
+            
+            // Check if item already exists in category
+            if (masterStockList[selectedCategory].includes(sanitizedName)) {
+                showToast(`"${sanitizedName}" already exists in ${selectedCategory}.`, 'error');
+                setIsAdding(false);
+                return;
+            }
+
+            // Add item to category
+            setMasterStockList(prev => ({
+                ...prev,
+                [selectedCategory]: [...prev[selectedCategory], sanitizedName]
+            }));
+
+            showToast(`"${sanitizedName}" added to ${selectedCategory} successfully!`, 'success');
+            setNewItemName('');
+        } catch (error) {
+            console.error("Error adding item:", error);
+            showToast(`Failed to add item: ${error.message}`, 'error');
+        } finally {
+            setIsAdding(false);
+        }
+    };
+
+    const handleDeleteItem = async (category, itemName) => {
+        const confirmed = await showConfirm({
+            title: 'Delete Item',
+            message: `Are you sure you want to delete "${itemName}" from ${category}? This action cannot be undone.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            confirmColor: 'red'
+        });
+        
+        if (confirmed) {
+            try {
+                setMasterStockList(prev => ({
+                    ...prev,
+                    [category]: prev[category].filter(item => item !== itemName)
+                }));
+                showToast(`"${itemName}" deleted from ${category} successfully!`, 'success');
+            } catch (error) {
+                console.error("Error deleting item:", error);
+                showToast(`Failed to delete item: ${error.message}`, 'error');
+            }
+        }
+    };
+
+    const SelectField = ({ label, value, onChange, children }) => (
+        <label className="flex flex-col min-w-40 flex-1">
+            <p className="text-sm font-semibold text-orange-700/80 leading-normal pb-2">{label}</p>
+            <select
+                className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 placeholder:text-gray-400 p-3 text-base font-normal leading-normal text-gray-900 transition-all duration-300"
+                value={value}
+                onChange={onChange}
+            >
+                {children}
+            </select>
+        </label>
+    );
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
+                <List className="w-6 h-6 mr-3 text-orange-600" /> Stock Item Manager
+            </h2>
+            <p className="text-sm text-gray-600">Add or remove items from each category in your inventory.</p>
+
+            {/* Add Item Form */}
+            <form onSubmit={handleAddItem} className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-4 max-w-md mx-auto">
+                <div className="flex space-x-4">
+                    <SelectField
+                        label="Category"
+                        value={selectedCategory}
+                        onChange={(e) => setSelectedCategory(e.target.value)}
+                    >
+                        <option value="MILKSHAKE">MILKSHAKE</option>
+                        <option value="ICE CREAM">ICE CREAM</option>
+                        <option value="TOPPINGS">TOPPINGS</option>
+                        <option value="MISC">MISC</option>
+                    </SelectField>
+                </div>
+                
+                <InputField
+                    label="New Item Name"
+                    type="text"
+                    value={newItemName}
+                    onChange={(e) => setNewItemName(e.target.value)}
+                    placeholder="e.g., New Flavor"
+                />
+                
+                <button
+                    type="submit"
+                    disabled={isAdding}
+                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg"
+                >
+                    {isAdding ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <List className="w-5 h-5 mr-2" />}
+                    Add Item
+                </button>
+            </form>
+
+            {/* Current Items by Category */}
+            <div className="space-y-4">
+                {Object.keys(masterStockList).map(category => (
+                    <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">
+                            {category} ({masterStockList[category].length} items)
+                        </h3>
+                        <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-2">
+                            {masterStockList[category].map(item => (
+                                <div key={item} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                                    <span className="text-sm font-medium text-gray-900 flex-1">{item}</span>
+                                    <button
+                                        onClick={() => handleDeleteItem(category, item)}
+                                        className="p-1 rounded-full text-red-600 hover:bg-red-100 transition duration-150 ml-2"
+                                        aria-label={`Delete ${item}`}
+                                    >
+                                        <Trash2 className="w-4 h-4" />
+                                    </button>
+                                </div>
+                            ))}
+                        </div>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
 // --- Admin User Management Component ---
 
 const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
@@ -468,7 +622,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => {
     const handleSave = async () => {
         try {
             await saveStock();
@@ -515,12 +669,12 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
             </div>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     // Updated section styling for Stitch UI
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`;
                                 return (
                                     <StockInput
@@ -554,7 +708,7 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
 /**
  * Stock Sold Report View (New 4th Tab)
  */
-const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary }) => {
+const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => {
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Stock Sold Report</h2>
@@ -569,11 +723,11 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
             </p>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-red-600 border-b border-red-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`; 
                                 const sold = calculateSold(category, item);
                                 const current = currentStock[key] || 0;
@@ -612,7 +766,7 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
 /**
  * Admin Ordering View
  */
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast }) => {
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }) => {
     const [showOutputModal, setShowOutputModal] = useState(false);
 
     const handleOutput = () => {
@@ -642,11 +796,11 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             </p>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`;
                                 const current = currentStock[key] || 0;
 
@@ -845,9 +999,10 @@ const App = () => {
     const [isOnline, setIsOnline] = useState(navigator.onLine); // Track network status
 
     // Data State
-    const [currentStock, setCurrentStock] = useState(getEmptyStock());
-    const [yesterdayStock, setYesterdayStock] = useState(getEmptyStock());
-    const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
+    const [masterStockList, setMasterStockList] = useState(INITIAL_STOCK_LIST);
+    const [currentStock, setCurrentStock] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
+    const [yesterdayStock, setYesterdayStock] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
+    const [orderQuantities, setOrderQuantities] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
     const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
     
     // --- Error Handling Utilities ---
@@ -1161,22 +1316,22 @@ const App = () => {
                 const data = todaySnap.data().stock;
                 setCurrentStock(data);
             } else {
-                setCurrentStock(getEmptyStock());
-                setOrderQuantities(getEmptyStock());
+                setCurrentStock(getEmptyStock(masterStockList));
+                setOrderQuantities(getEmptyStock(masterStockList));
             }
 
             const yesterdaySnap = await getDoc(yesterdayDocRef);
             if (yesterdaySnap.exists()) {
                 setYesterdayStock(yesterdaySnap.data().stock);
             } else {
-                setYesterdayStock(getEmptyStock());
+                setYesterdayStock(getEmptyStock(masterStockList));
             }
         } catch (e) {
             console.error("Error fetching stock data:", e);
         } finally {
             setLoadingData(false);
         }
-    }, [db]);
+    }, [db, masterStockList]);
 
     // Re-fetch data whenever store or auth state changes
     useEffect(() => {
@@ -1287,8 +1442,8 @@ const App = () => {
             };
 
             // Calculate sold stock for each item
-            Object.keys(MASTER_STOCK_LIST).forEach(category => {
-                MASTER_STOCK_LIST[category].forEach(item => {
+            Object.keys(masterStockList).forEach(category => {
+                masterStockList[category].forEach(item => {
                     const key = `${category}-${item}`;
                     const current = currentStock[key] || 0;
                     const yesterday = yesterdayStock[key] || 0;
@@ -1312,71 +1467,57 @@ const App = () => {
         } catch (error) {
             handleError(error, 'Data Export');
         }
-    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock]);
+    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock, masterStockList]);
 
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
         const storeName = stores[selectedStoreId] || selectedStoreId;
-        let output = `${storeName}\n\n`;
+        let output = `${storeName}\n`;
 
-        const sections = {
-            'MILKSHAKE': [],
-            'ICE CREAM': [],
-            'TOPPINGS': [],
-        };
-        const miscItems = [];
-        const nonOrderedItems = [];
-
-        Object.keys(MASTER_STOCK_LIST).forEach(category => {
-            MASTER_STOCK_LIST[category].forEach(item => {
-                const key = `${category}-${item}`; 
-                const quantity = orderQuantities[key] || ''; 
-                if (quantity !== 0 && quantity !== '') {
-                    if (sections[category]) {
-                        sections[category].push(`${item} - ${quantity}`);
-                    } else if (category === 'MISC' && item === 'Ice Cream Dabee') {
-                        miscItems.push(`${item} - ${quantity}`);
-                    }
-                } else {
-                    // Track items that have not been ordered
-                    if (sections[category]) {
-                        nonOrderedItems.push(`${category}: ${item}`);
-                    } else if (category === 'MISC') {
-                        nonOrderedItems.push(`MISC: ${item}`);
-                    }
-                }
+        // Generate MILKSHAKE section
+        if (masterStockList.MILKSHAKE && masterStockList.MILKSHAKE.length > 0) {
+            output += ` *MILKSHAKE* `;
+            const milkshakeItems = masterStockList.MILKSHAKE.map(item => {
+                const key = `MILKSHAKE-${item}`;
+                const quantity = orderQuantities[key] || 0;
+                return `${item} - ${quantity}`;
             });
-        });
-
-        if (sections.MILKSHAKE.length > 0) {
-            output += `*MILKSHAKE*\n`;
-            output += sections.MILKSHAKE.join('\n');
-            output += '\n\n';
+            output += milkshakeItems.join(' - ') + ' -\n';
         }
 
-        if (sections['ICE CREAM'].length > 0) {
-            output += `*ICE CREAM*\n`;
-            output += sections['ICE CREAM'].join('\n');
-            output += '\n\n';
+        // Generate ICE CREAM section
+        if (masterStockList['ICE CREAM'] && masterStockList['ICE CREAM'].length > 0) {
+            output += ` *ICE CREAM*`;
+            const iceCreamItems = masterStockList['ICE CREAM'].map(item => {
+                const key = `ICE CREAM-${item}`;
+                const quantity = orderQuantities[key] || 0;
+                return `${item} - ${quantity}`;
+            });
+            output += iceCreamItems.join(' - ') + ' -\n';
         }
 
-        if (sections.TOPPINGS.length > 0) {
-            output += `*TOPPINGS*\n`;
-            output += sections.TOPPINGS.join('\n');
-            output += '\n\n';
+        // Generate TOPPINGS section
+        if (masterStockList.TOPPINGS && masterStockList.TOPPINGS.length > 0) {
+            output += ` *TOPPINGS* `;
+            const toppingItems = masterStockList.TOPPINGS.map(item => {
+                const key = `TOPPINGS-${item}`;
+                const quantity = orderQuantities[key] || 0;
+                return `${item} - ${quantity}`;
+            });
+            output += toppingItems.join(' - ') + ' -\n';
         }
 
-        if (miscItems.length > 0) {
-             output += miscItems.join('\n');
-             output += '\n\n';
+        // Generate MISC section
+        if (masterStockList.MISC && masterStockList.MISC.length > 0) {
+            const miscItems = masterStockList.MISC.map(item => {
+                const key = `MISC-${item}`;
+                const quantity = orderQuantities[key] || 0;
+                return `${item} - ${quantity}`;
+            });
+            output += miscItems.join(' - ') + ' -\n';
         }
 
-        // Add non-ordered items section
-        if (nonOrderedItems.length > 0) {
-            output += `*ITEMS NOT ORDERED*\n`;
-            output += nonOrderedItems.join('\n');
-            output += '\n\n';
-        }
+        output += '\n';
 
         // Output logic for Kumar Parisar only if Venkateshwara Hospitality (store-1) is selected
         if (selectedStoreId === 'store-1' && stores['store-2']) {
@@ -1385,7 +1526,7 @@ const App = () => {
         }
 
         return output.trim();
-    }, [orderQuantities, selectedStoreId, stores]);
+    }, [orderQuantities, selectedStoreId, stores, masterStockList]);
 
     const handleLogout = async () => {
         if (auth) {
@@ -1706,6 +1847,7 @@ const App = () => {
                     <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" />
                     <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" />
                     <AdminButton icon={Store} label="Store Manager" viewName="storemanager" />
+                    <AdminButton icon={List} label="Item Manager" viewName="itemmanager" />
                 </div>
             </div>
         );
@@ -1744,6 +1886,12 @@ const App = () => {
                             label="Users"
                             active={currentView === 'usermanager'}
                             onClick={() => setView('usermanager')}
+                        />
+                        <NavButton
+                            icon={List}
+                            label="Items"
+                            active={currentView === 'itemmanager'}
+                            onClick={() => setView('itemmanager')}
                         />
                         
                         {selectedStoreId && (
@@ -1801,6 +1949,9 @@ const App = () => {
             case 'usermanager':
                 if (!isAdmin) return <HomeView />;
                 return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} />;
+            case 'itemmanager':
+                if (!isAdmin) return <HomeView />;
+                return <StockItemManagementView masterStockList={masterStockList} setMasterStockList={setMasterStockList} showToast={showToast} showConfirm={showConfirm} />;
             case 'entry':
                 return (
                     <StockEntryView
@@ -1812,6 +1963,7 @@ const App = () => {
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}
                         showToast={showToast}
+                        masterStockList={masterStockList}
                     />
                 );
             case 'sold':
@@ -1822,6 +1974,7 @@ const App = () => {
                         yesterdayStock={yesterdayStock}
                         calculateSold={calculateSold}
                         soldStockSummary={soldStockSummary}
+                        masterStockList={masterStockList}
                     />
                 );
             case 'order':
@@ -1833,6 +1986,7 @@ const App = () => {
                         setOrderQuantities={setOrderQuantities}
                         generateOrderOutput={generateOrderOutput}
                         showToast={showToast}
+                        masterStockList={masterStockList}
                     />
                 );
             default:
