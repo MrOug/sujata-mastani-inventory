@@ -493,9 +493,9 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
 // --- Admin User Management Component ---
 
 const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [role, setRole] = useState('staff');
+    const [newUsername, setNewUsername] = useState('');
+    const [newPassword, setNewPassword] = useState('');
+    const [newUserRole, setNewUserRole] = useState('staff');
     const [storeId, setStoreId] = useState('');
     const [isCreating, setIsCreating] = useState(false);
 
@@ -511,7 +511,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         setIsCreating(true);
 
         // VALIDATE CREDENTIALS
-        const validationErrors = validateUserCredentials(username, password);
+        const validationErrors = validateUserCredentials(newUsername, newPassword);
         if (validationErrors.length > 0) {
             showToast(validationErrors.join(', '), 'error');
             setIsCreating(false);
@@ -519,20 +519,20 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         }
 
         try {
-            const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
-            const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
+            const fakeEmail = `${newUsername.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+            const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, newPassword);
             const newUser = userCredential.user;
 
             const userConfigRef = doc(db, `artifacts/${appId}/users/${newUser.uid}/user_config`, 'profile');
             await setDoc(userConfigRef, {
-                role: role,
+                role: newUserRole,
                 storeId: storeId,
-                username: username.trim(),
+                username: newUsername.trim(),
             }, { merge: true });
 
-            showToast(`User ${username} created successfully!`, 'success');
-            setUsername('');
-            setPassword('');
+            showToast(`User ${newUsername} created successfully!`, 'success');
+            setNewUsername('');
+            setNewPassword('');
         } catch (error) {
             console.error("Error creating user:", error);
             showToast(`Failed: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`, 'error');
@@ -566,15 +566,15 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                     <InputField
                         label="Username"
                         type="text"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        value={newUsername}
+                        onChange={(e) => setNewUsername(e.target.value)}
                         placeholder="e.g., staff.kothrud"
                     />
                     <InputField
                         label="Password (Min 6 chars)"
                         type="password"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={newPassword}
+                        onChange={(e) => setNewPassword(e.target.value)}
                         placeholder="Create a password"
                         minLength="6"
                     />
@@ -583,8 +583,8 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                 <div className="flex space-x-4">
                     <SelectField
                         label="Role"
-                        value={role}
-                        onChange={(e) => setRole(e.target.value)}
+                        value={newUserRole}
+                        onChange={(e) => setNewUserRole(e.target.value)}
                     >
                         <option value="staff">Staff</option>
                         <option value="admin">Admin</option>
