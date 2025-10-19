@@ -229,11 +229,11 @@ const InputField = ({ label, type = 'text', value, onChange, placeholder, minLen
 
 const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     const [newStoreName, setNewStoreName] = useState('');
-    const [isAdding, setIsAdding] = useState(false);
+    const [isAddingStore, setIsAddingStore] = useState(false);
 
     const handleAddStore = async (e) => {
         e.preventDefault();
-        setIsAdding(true);
+        setIsAddingStore(true);
 
         try {
             // VALIDATE STORE DATA
@@ -251,7 +251,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
             console.error("Error adding store:", error);
             showToast(`Failed: ${error.message}`, 'error');
         } finally {
-            setIsAdding(false);
+            setIsAddingStore(false);
         }
     };
 
@@ -302,10 +302,10 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
                 />
                 <button
                     type="submit"
-                    disabled={isAdding}
+                    disabled={isAddingStore}
                     className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg"
                 >
-                    {isAdding ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <Store className="w-5 h-5 mr-2" />}
+                    {isAddingStore ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <Store className="w-5 h-5 mr-2" />}
                     Add New Store
                 </button>
             </form>
@@ -905,8 +905,8 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
 
 const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
     const [isRegister, setIsRegister] = useState(isFirstUser);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
+    const [authUsername, setAuthUsername] = useState('');
+    const [authPassword, setAuthPassword] = useState('');
     const [authError, setAuthError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
@@ -915,7 +915,7 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
         setAuthError('');
         setIsLoading(true);
 
-        if (password.length < 6) {
+        if (authPassword.length < 6) {
              setAuthError("Password must be at least 6 characters.");
              setIsLoading(false);
              return;
@@ -923,13 +923,13 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
 
         try {
             // Use a dummy domain for Firebase Auth
-            const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+            const fakeEmail = `${authUsername.toLowerCase().trim()}@sujata-mastani-inventory.local`;
             if (isRegister) {
-                const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
-                onLoginSuccess(userCredential.user, username.trim());
+                const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, authPassword);
+                onLoginSuccess(userCredential.user, authUsername.trim());
             } else {
-                const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, password);
-                onLoginSuccess(userCredential.user, username.trim());
+                const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, authPassword);
+                onLoginSuccess(userCredential.user, authUsername.trim());
             }
         } catch (err) {
             console.error("Auth Error:", err);
@@ -950,8 +950,8 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
                     <input
                         type="text"
                         placeholder="Username"
-                        value={username}
-                        onChange={(e) => setUsername(e.target.value)}
+                        value={authUsername}
+                        onChange={(e) => setAuthUsername(e.target.value)}
                         required
                         className="w-full p-3 h-12 border border-gray-300 rounded-lg pl-10 focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
                     />
@@ -961,8 +961,8 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
                     <input
                         type="password"
                         placeholder="Password (Min 6 characters)"
-                        value={password}
-                        onChange={(e) => setPassword(e.target.value)}
+                        value={authPassword}
+                        onChange={(e) => setAuthPassword(e.target.value)}
                         required
                         minLength="6"
                         className="w-full p-3 h-12 border border-gray-300 rounded-lg pl-10 focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
@@ -1000,7 +1000,7 @@ const App = () => {
     const [auth, setAuth] = useState(null);
     const [userId, setUserId] = useState(null);
     const [isAuthReady, setIsAuthReady] = useState(false); // Start as NOT ready
-    const [role, setRole] = useState(null); 
+    const [userRole, setUserRole] = useState(null); 
     const [userStoreId, setUserStoreId] = useState(null); 
     const [stores, setStores] = useState({}); // Dynamic stores state
 
@@ -1020,7 +1020,7 @@ const App = () => {
     const [hasSaveError, setHasSaveError] = useState(false);
     
     // Error Handling State
-    const [error, setError] = useState(null);
+    const [appError, setAppError] = useState(null);
     const [retryCount, setRetryCount] = useState(0);
     const [isRetrying, setIsRetrying] = useState(false);
     
@@ -1040,7 +1040,7 @@ const App = () => {
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
         console.error(`Error in ${context}:`, error);
-        setError({
+        setAppError({
             message: error.message || 'An unexpected error occurred',
             context,
             timestamp: new Date().toISOString(),
@@ -1050,7 +1050,7 @@ const App = () => {
     };
 
     const clearError = () => {
-        setError(null);
+        setAppError(null);
         setRetryCount(0);
         setIsRetrying(false);
     };
@@ -1109,7 +1109,7 @@ const App = () => {
                 const fetchUserProfile = async (user, username = null) => {
                     try {
                         if (!user || user.isAnonymous) {
-                            setRole(null);
+                            setUserRole(null);
                             setUserStoreId(null);
                             return;
                         }
@@ -1117,12 +1117,12 @@ const App = () => {
                         const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
                         const roleSnap = await getDoc(roleDocRef);
                         if (roleSnap.exists()) {
-                            setRole(roleSnap.data().role);
+                            setUserRole(roleSnap.data().role);
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
                             const defaultRole = 'admin'; 
                             await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
-                            setRole(defaultRole);
+                            setUserRole(defaultRole);
                             setUserStoreId(null);
                         }
                     } catch (error) {
@@ -1134,7 +1134,7 @@ const App = () => {
                     try {
                         if (!user) {
                             setUserId(null);
-                            setRole(null);
+                            setUserRole(null);
                             setUserStoreId(null);
                             setShowAuthModal(true);
                             setProcessStep('authenticating');
@@ -1238,11 +1238,11 @@ const App = () => {
             console.log("Unsubscribing from stores listener");
             unsubscribeStores();
         };
-    }, [db, appId, isAuthReady, userId, role]); // Added role to dependencies
+    }, [db, appId, isAuthReady, userId, userRole]); // Added userRole to dependencies
 
     // 3. Set default storeId for admins after stores are loaded
     useEffect(() => {
-        if (role === 'admin' && !userStoreId && Object.keys(stores).length > 0 && db && userId) {
+        if (userRole === 'admin' && !userStoreId && Object.keys(stores).length > 0 && db && userId) {
             const setDefaultStoreId = async () => {
                 const defaultStoreId = Object.keys(stores)[0];
                 const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
@@ -1389,22 +1389,22 @@ const App = () => {
 
     // Re-fetch data whenever store or auth state changes
     useEffect(() => {
-        if (role === 'staff' && userStoreId && selectedStoreId !== userStoreId) {
+        if (userRole === 'staff' && userStoreId && selectedStoreId !== userStoreId) {
             setSelectedStoreId(userStoreId);
         }
 
         if (db && userId && selectedStoreId) {
             fetchStockData(selectedStoreId);
         }
-    }, [db, userId, selectedStoreId, fetchStockData, role, userStoreId]);
+    }, [db, userId, selectedStoreId, fetchStockData, userRole, userStoreId]);
 
     // Prevent staff from accessing wrong stores via render-time redirect
     useEffect(() => {
-        if (role === 'staff' && selectedStoreId && selectedStoreId !== userStoreId && view !== 'home') {
+        if (userRole === 'staff' && selectedStoreId && selectedStoreId !== userStoreId && view !== 'home') {
             setSelectedStoreId(userStoreId);
             setView('entry');
         }
-    }, [role, selectedStoreId, userStoreId, view]);
+    }, [userRole, selectedStoreId, userStoreId, view]);
 
     // 4. Data Saving (Staff Action)
     const saveStock = async () => {
@@ -1689,7 +1689,7 @@ const App = () => {
                 const roleSnap = await getDoc(roleDocRef);
                 
                 if (roleSnap.exists()) {
-                    setRole(roleSnap.data().role);
+                    setUserRole(roleSnap.data().role);
                     setUserStoreId(roleSnap.data().storeId || null);
                 } else {
                     // This is the first admin registration flow
@@ -1707,7 +1707,7 @@ const App = () => {
                         timestamp: new Date().toISOString()
                     });
 
-                    setRole(defaultRole);
+                    setUserRole(defaultRole);
                     setUserStoreId(defaultStoreId);
                     setIsFirstUser(false); // Update state to prevent future registrations
                 }
@@ -1865,9 +1865,9 @@ const App = () => {
             <div className="space-y-4">
                 {Object.entries(stores).length > 0 ? (
                     Object.entries(stores).map(([id, name]) => {
-                        const isAssignedToStore = role === 'admin' || userStoreId === id;
+                        const isAssignedToStore = userRole === 'admin' || userStoreId === id;
                         
-                        if (role === 'staff' && userStoreId !== id) return null;
+                        if (userRole === 'staff' && userStoreId !== id) return null;
 
                         return (
                             <div 
@@ -1882,7 +1882,7 @@ const App = () => {
                                     </div>
                                     <div className="flex-1">
                                         <p className="font-display text-lg font-bold text-gray-900">{name}</p>
-                                        {role === 'staff' && <span className="text-xs font-semibold text-green-600">Your Assigned Store</span>}
+                                        {userRole === 'staff' && <span className="text-xs font-semibold text-green-600">Your Assigned Store</span>}
                                     </div>
                                 </div>
                                 <div className="border-t border-gray-200 mt-3 pt-3">
@@ -1893,7 +1893,7 @@ const App = () => {
                                         >
                                             <List className="w-4 h-4 mr-2" /> Stock Entry
                                         </button>
-                                        {role === 'admin' && (
+                                        {userRole === 'admin' && (
                                             <button
                                                 onClick={() => { setSelectedStoreId(id); setView('admin'); }}
                                                 className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50"
@@ -1915,12 +1915,12 @@ const App = () => {
                             <div>
                                 <h3 className="font-display text-xl font-bold text-gray-900 mb-2">No Stores Found</h3>
                                 <p className="text-gray-600 mb-4">
-                                    {role === 'admin' 
+                                    {userRole === 'admin' 
                                         ? 'Create your first store to get started with inventory management.'
                                         : 'No stores have been assigned to you yet. Contact your administrator.'
                                     }
                                 </p>
-                                {role === 'admin' && (
+                                {userRole === 'admin' && (
                                     <button
                                         onClick={() => setView('storemanager')}
                                         className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md flex items-center justify-center mx-auto"
@@ -1994,7 +1994,7 @@ const App = () => {
                     />
                 )}
 
-                {role === 'admin' && (
+                {userRole === 'admin' && (
                     <>
                         <NavButton
                             icon={Store} // New Store Management Button
@@ -2057,7 +2057,7 @@ const App = () => {
         }
         
         const storeName = stores[selectedStoreId] || 'Unknown Store';
-        const isAdmin = role === 'admin';
+        const isAdmin = userRole === 'admin';
 
         // Staff access control is now handled in useEffect above
         switch (view) {
@@ -2206,9 +2206,9 @@ const App = () => {
                     {selectedStoreId ? stores[selectedStoreId] : 'SUJATA MASTANI'}
                 </h1>
                 <div className="flex items-center space-x-3">
-                    {role && (
-                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${role === 'admin' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}>
-                            {role.toUpperCase()}
+                    {userRole && (
+                        <span className={`px-3 py-1 text-xs font-semibold rounded-full ${userRole === 'admin' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}>
+                            {userRole.toUpperCase()}
                         </span>
                     )}
                     {userId && (
