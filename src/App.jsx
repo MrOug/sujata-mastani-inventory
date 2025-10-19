@@ -8,6 +8,14 @@ import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSna
 // Replaced lucide icons with standard icon names for theme consistency
 import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus, X, Store, Trash2 } from 'lucide-react'; 
 
+// Import components
+import StockInput from './components/StockInput';
+import Modal from './components/Modal';
+import Toast from './components/Toast';
+import ToastContainer from './components/ToastContainer';
+import ConfirmModal from './components/ConfirmModal';
+import LoadingSpinner from './components/LoadingSpinner';
+
 // Import utility functions
 import { validateStockData, validateUserCredentials, validateStoreData, RateLimiter } from './utils/validation-utils';
 import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils';
@@ -68,148 +76,6 @@ const getYesterdayDate = () => {
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
 };
-
-// --- Custom Components ---
-
-/**
- * Custom Input component for consistent styling
- */
-const StockInput = ({ label, value, onChange, placeholder = '0' }) => (
-    // Updated Input Styling for Stitch UI
-    <div className="flex items-center justify-between p-3 bg-white rounded-lg mb-2 border border-gray-100">
-        <label className="text-sm font-medium text-gray-800 w-1/2 overflow-hidden whitespace-nowrap text-ellipsis pr-2">{label}</label>
-        <input
-            type="number"
-            min="0"
-            step="0.01"
-            value={value || ''}
-            onChange={(e) => onChange(parseFloat(e.target.value) || 0)}
-            placeholder={placeholder}
-            // Removed complex CSS hacks here; relying on global style block
-            className="w-1/3 p-2 text-base text-right bg-gray-50 border border-gray-200 rounded-lg focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150 shadow-inner"
-        />
-    </div>
-);
-
-/**
- * Universal Modal Component (Used instead of alert/confirm)
- */
-const Modal = ({ title, children, onClose }) => (
-    <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 p-4 backdrop-blur-sm animate-fadeIn">
-        <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 relative border border-orange-100">
-            <h3 className="text-2xl font-bold font-display text-orange-700 border-b border-gray-200 pb-3 mb-4">{title}</h3>
-            {children}
-            {onClose && (
-                <button
-                    onClick={onClose}
-                    className="absolute top-4 right-4 text-gray-500 hover:text-orange-600 transition-colors"
-                >
-                    <X className="w-6 h-6" />
-                </button>
-            )}
-        </div>
-    </div>
-);
-
-/**
- * Toast Notification Component
- */
-const Toast = ({ message, type = 'success', onClose }) => {
-    const icons = {
-        success: '✓',
-        error: '✗',
-        warning: '⚠',
-        info: 'ℹ'
-    };
-    
-    const colors = {
-        success: 'bg-green-500',
-        error: 'bg-red-500',
-        warning: 'bg-yellow-500',
-        info: 'bg-blue-500'
-    };
-    
-    useEffect(() => {
-        const timer = setTimeout(onClose, 4000);
-        return () => clearTimeout(timer);
-    }, [onClose]);
-    
-    return (
-        <div className="fixed top-4 right-4 z-50 animate-slideInRight">
-            <div className={`${colors[type]} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px] max-w-md`}>
-                <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white/20 rounded-full text-xl font-bold">
-                    {icons[type]}
-                </div>
-                <p className="flex-1 font-medium">{message}</p>
-                <button 
-                    onClick={onClose}
-                    className="flex-shrink-0 hover:bg-white/20 rounded p-1 transition"
-                >
-                    <X className="w-5 h-5" />
-                </button>
-            </div>
-        </div>
-    );
-};
-
-/**
- * Toast Container - manages multiple toasts
- */
-const ToastContainer = ({ toasts, removeToast }) => {
-    return (
-        <div className="fixed top-4 right-4 z-50 flex flex-col gap-3">
-            {toasts.map((toast) => (
-                <Toast
-                    key={toast.id}
-                    message={toast.message}
-                    type={toast.type}
-                    onClose={() => removeToast(toast.id)}
-                />
-            ))}
-        </div>
-    );
-};
-
-/**
- * Confirmation Modal Component (replaces browser confirm)
- */
-const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', confirmColor = 'orange' }) => {
-    const colorClasses = {
-        orange: 'bg-orange-600 hover:bg-orange-700',
-        red: 'bg-red-600 hover:bg-red-700',
-        green: 'bg-green-600 hover:bg-green-700'
-    };
-    
-    return (
-        <Modal title={title} onClose={onCancel}>
-            <p className="text-gray-700 mb-6 text-base leading-relaxed">{message}</p>
-            <div className="flex gap-3">
-                <button
-                    onClick={onCancel}
-                    className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition duration-150"
-                >
-                    {cancelText}
-                </button>
-                <button
-                    onClick={onConfirm}
-                    className={`flex-1 py-3 ${colorClasses[confirmColor]} text-white font-bold rounded-xl transition duration-150 shadow-lg`}
-                >
-                    {confirmText}
-                </button>
-            </div>
-        </Modal>
-    );
-};
-
-/**
- * Loading state component
- */
-const LoadingSpinner = () => (
-    <div className="flex flex-col items-center justify-center h-full min-h-screen bg-gray-50 text-orange-600">
-        <Loader className="animate-spin w-10 h-10 mb-4 text-orange-600" />
-        <p className="text-xl font-display text-gray-700">Initializing Secure App...</p>
-    </div>
-);
 
 // --- Admin Store Management Component (NEW) ---
 const InputField = ({ label, type = 'text', value, onChange, placeholder, minLength }) => (
