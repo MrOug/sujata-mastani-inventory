@@ -8,6 +8,12 @@ import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSna
 // Replaced lucide icons with standard icon names for theme consistency
 import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus, X, Store, Trash2 } from 'lucide-react'; 
 
+// Import utility functions
+import { validateStockData, validateUserCredentials, validateStoreData, RateLimiter } from './utils/validation-utils';
+import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils';
+import { storageBackup, recoverFromBackup } from './utils/storage-backup';
+import { perfMonitor, getMemoryInfo, getNetworkSpeed } from './utils/performance-monitor'; 
+
 // --- Global Constants and Firebase Setup ---
 
 // These global variables are provided by the canvas environment
@@ -229,25 +235,21 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
         e.preventDefault();
         setIsAdding(true);
 
-        if (!newStoreName.trim()) {
-            showToast("Store name cannot be empty.", 'error');
-            setIsAdding(false);
-            return;
-        }
-
         try {
+            // VALIDATE STORE DATA
+            const validatedStore = validateStoreData({ name: newStoreName });
+
             const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
-            // Use addDoc to let Firestore generate a unique ID
             await addDoc(storesColRef, {
-                name: newStoreName.trim(),
+                name: validatedStore.name,
                 createdAt: new Date().toISOString()
             });
 
-            showToast(`Store "${newStoreName}" added successfully!`, 'success');
+            showToast(`Store "${validatedStore.name}" added successfully!`, 'success');
             setNewStoreName('');
         } catch (error) {
             console.error("Error adding store:", error);
-            showToast(`Failed to add store: ${error.message}`, 'error');
+            showToast(`Failed: ${error.message}`, 'error');
         } finally {
             setIsAdding(false);
         }
@@ -347,20 +349,20 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         e.preventDefault();
         setIsCreating(true);
 
-        if (password.length < 6) {
-             showToast("Password must be at least 6 characters long.", 'error');
-             setIsCreating(false);
-             return;
+        // VALIDATE CREDENTIALS
+        const validationErrors = validateUserCredentials(username, password);
+        if (validationErrors.length > 0) {
+            showToast(validationErrors.join(', '), 'error');
+            setIsCreating(false);
+            return;
         }
 
         try {
-            // Create a fake email from the username for Firebase Auth
             const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
             const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, password);
             const newUser = userCredential.user;
 
             const userConfigRef = doc(db, `artifacts/${appId}/users/${newUser.uid}/user_config`, 'profile');
-            // Save the actual username in the user's profile
             await setDoc(userConfigRef, {
                 role: role,
                 storeId: storeId,
@@ -372,7 +374,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
             setPassword('');
         } catch (error) {
             console.error("Error creating user:", error);
-            showToast(`Failed to create user: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`, 'error');
+            showToast(`Failed: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`, 'error');
         } finally {
             setIsCreating(false);
         }
@@ -1125,6 +1127,8 @@ const App = () => {
         const key = `${category}-${item}`;
         const current = currentStock[key] || 0;
         const yesterday = yesterdayStock[key] || 0;
+        // Sold stock = Yesterday's closing stock - Today's current stock
+        // This represents what was sold during the day
         return yesterday - current;
     }, [currentStock, yesterdayStock]);
 
@@ -1200,53 +1204,59 @@ const App = () => {
                 throw new Error("Database or Store not initialized.");
             }
 
-            // Validate stock data
-            const hasValidData = Object.values(currentStock).some(value => value > 0);
-            if (!hasValidData) {
+            // VALIDATE STOCK DATA
+            const { sanitized, errors } = validateStockData(currentStock);
+            
+            if (errors.length > 0) {
+                showToast(`Validation warnings: ${errors.slice(0, 3).join(', ')}`, 'warning');
+            }
+
+            // Count items
+            const totalItems = Object.values(sanitized).filter(value => value > 0).length;
+            const totalQuantity = Object.values(sanitized).reduce((sum, value) => sum + (value || 0), 0);
+
+            if (totalItems === 0) {
                 throw new Error("Please enter at least one stock item before saving.");
             }
 
-            // Count total items with values > 0
-            const totalItems = Object.values(currentStock).filter(value => value > 0).length;
-            const totalQuantity = Object.values(currentStock).reduce((sum, value) => sum + (value || 0), 0);
-
-            // Show confirmation dialog
+            // Confirmation
             const confirmed = await showConfirm({
                 title: 'Confirm Stock Entry',
-                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems with stock: ${totalItems}\nTotal quantity: ${totalQuantity}\n\nDo you want to save this stock entry?`,
+                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems: ${totalItems}\nTotal: ${totalQuantity}\n\nSave?`,
                 confirmText: 'Save Stock',
                 cancelText: 'Cancel',
                 confirmColor: 'orange'
             });
 
-            if (!confirmed) {
-                return; // User cancelled
-            }
-
-            // Sanitize stock data - ensure all values are valid numbers
-            const sanitizedStock = {};
-            Object.keys(currentStock).forEach(key => {
-                const value = currentStock[key];
-                sanitizedStock[key] = (typeof value === 'number' && !isNaN(value) && value >= 0) ? parseFloat(value.toFixed(2)) : 0;
-            });
+            if (!confirmed) return;
 
             setIsSaving(true);
-            const date = selectedDate; // Use selected date instead of always today
-            const docId = `${selectedStoreId}-${date}`;
-            const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
-            await setDoc(docRef, {
-                storeId: selectedStoreId,
-                date: date,
-                stock: sanitizedStock, 
-                userId: userId,
-                timestamp: new Date().toISOString()
+            // SAVE WITH PERFORMANCE MONITORING
+            await perfMonitor.measureAsync('saveStock', async () => {
+                const date = selectedDate;
+                const docId = `${selectedStoreId}-${date}`;
+                const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
+
+                // USE RETRY LOGIC
+                await retryOperation(async () => {
+                    await setDoc(docRef, {
+                        storeId: selectedStoreId,
+                        date: date,
+                        stock: sanitized,
+                        userId: userId,
+                        timestamp: new Date().toISOString()
+                    });
+                });
+
+                // BACKUP TO LOCAL STORAGE
+                storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
             });
 
-            console.log("Stock saved successfully");
+            showToast('Stock saved successfully!', 'success');
         } catch (error) {
             handleError(error, 'Stock Saving');
-            throw error; // Re-throw for UI handling
+            showToast(error.message || 'Error saving stock', 'error');
         } finally {
             setIsSaving(false);
         }
@@ -1315,6 +1325,7 @@ const App = () => {
             'TOPPINGS': [],
         };
         const miscItems = [];
+        const nonOrderedItems = [];
 
         Object.keys(MASTER_STOCK_LIST).forEach(category => {
             MASTER_STOCK_LIST[category].forEach(item => {
@@ -1325,6 +1336,13 @@ const App = () => {
                         sections[category].push(`${item} - ${quantity}`);
                     } else if (category === 'MISC' && item === 'Ice Cream Dabee') {
                         miscItems.push(`${item} - ${quantity}`);
+                    }
+                } else {
+                    // Track items that have not been ordered
+                    if (sections[category]) {
+                        nonOrderedItems.push(`${category}: ${item}`);
+                    } else if (category === 'MISC') {
+                        nonOrderedItems.push(`MISC: ${item}`);
                     }
                 }
             });
@@ -1353,12 +1371,18 @@ const App = () => {
              output += '\n\n';
         }
 
+        // Add non-ordered items section
+        if (nonOrderedItems.length > 0) {
+            output += `*ITEMS NOT ORDERED*\n`;
+            output += nonOrderedItems.join('\n');
+            output += '\n\n';
+        }
+
         // Output logic for Kumar Parisar only if Venkateshwara Hospitality (store-1) is selected
         if (selectedStoreId === 'store-1' && stores['store-2']) {
             output += stores['store-2'];
             output += '\n';
         }
-
 
         return output.trim();
     }, [orderQuantities, selectedStoreId, stores]);
