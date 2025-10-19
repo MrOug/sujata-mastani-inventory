@@ -341,23 +341,23 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 const StockItemManagementView = ({ masterStockList, setMasterStockList, showToast, showConfirm }) => {
     const [newItemName, setNewItemName] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('MILKSHAKE');
-    const [isAdding, setIsAdding] = useState(false);
+    const [isAddingItem, setIsAddingItem] = useState(false);
 
     const handleAddItem = async (e) => {
         e.preventDefault();
-        setIsAdding(true);
+        setIsAddingItem(true);
 
         try {
             // VALIDATE ITEM NAME
             if (!newItemName.trim()) {
                 showToast("Item name cannot be empty.", 'error');
-                setIsAdding(false);
+                setIsAddingItem(false);
                 return;
             }
 
             if (newItemName.trim().length > 100) {
                 showToast("Item name too long (max 100 characters).", 'error');
-                setIsAdding(false);
+                setIsAddingItem(false);
                 return;
             }
 
@@ -366,7 +366,7 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
             // Check if item already exists in category
             if (masterStockList[selectedCategory].includes(sanitizedName)) {
                 showToast(`"${sanitizedName}" already exists in ${selectedCategory}.`, 'error');
-                setIsAdding(false);
+                setIsAddingItem(false);
                 return;
             }
 
@@ -382,7 +382,7 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
             console.error("Error adding item:", error);
             showToast(`Failed to add item: ${error.message}`, 'error');
         } finally {
-            setIsAdding(false);
+            setIsAddingItem(false);
         }
     };
 
@@ -454,10 +454,10 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
                 
                 <button
                     type="submit"
-                    disabled={isAdding}
+                    disabled={isAddingItem}
                     className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg"
                 >
-                    {isAdding ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <List className="w-5 h-5 mr-2" />}
+                    {isAddingItem ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <List className="w-5 h-5 mr-2" />}
                     Add Item
                 </button>
             </form>
@@ -496,8 +496,15 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('staff');
-    const [storeId, setStoreId] = useState(Object.keys(stores)[0]);
+    const [storeId, setStoreId] = useState('');
     const [isCreating, setIsCreating] = useState(false);
+
+    // Set default storeId when stores are available
+    useEffect(() => {
+        if (Object.keys(stores).length > 0 && !storeId) {
+            setStoreId(Object.keys(stores)[0]);
+        }
+    }, [stores, storeId]);
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
@@ -900,16 +907,16 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
     const [isRegister, setIsRegister] = useState(isFirstUser);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
+    const [authError, setAuthError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
 
     const handleSubmit = async (e) => {
         e.preventDefault();
-        setError('');
+        setAuthError('');
         setIsLoading(true);
 
         if (password.length < 6) {
-             setError("Password must be at least 6 characters.");
+             setAuthError("Password must be at least 6 characters.");
              setIsLoading(false);
              return;
         }
@@ -926,7 +933,7 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
             }
         } catch (err) {
             console.error("Auth Error:", err);
-            setError(err.message.replace('Firebase: Error (auth/', '').replace(').', ''));
+            setAuthError(err.message.replace('Firebase: Error (auth/', '').replace(').', ''));
         } finally {
             setIsLoading(false);
         }
@@ -962,7 +969,7 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
                     />
                 </div>
                 
-                {error && <p className="text-red-500 text-sm p-2 bg-red-50 rounded-lg">{error}</p>}
+                {authError && <p className="text-red-500 text-sm p-2 bg-red-50 rounded-lg">{authError}</p>}
 
                 <button
                     type="submit"
@@ -974,7 +981,7 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
             </form>
             
             <button
-                onClick={() => { setIsRegister(p => !p); setError(''); }}
+                onClick={() => { setIsRegister(p => !p); setAuthError(''); }}
                 className="w-full mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium"
                 disabled={isLoading}
             >
