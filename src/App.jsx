@@ -1,10 +1,6 @@
-import React, { useState, useEffect, useCallback, useMemo } from 'react';
-import { initializeApp } from 'firebase/app';
-import { 
-    getAuth, signInAnonymously, signInWithCustomToken, onAuthStateChanged, 
-    createUserWithEmailAndPassword, signInWithEmailAndPassword, signOut 
-} from 'firebase/auth';
-import { getFirestore, doc, setDoc, getDoc, updateDoc, collection, addDoc, onSnapshot, deleteDoc, getDocs } from 'firebase/firestore';
+import React, { useReducer, useEffect, useCallback, useMemo } from 'react';
+import { signOut } from 'firebase/auth';
+import { doc, setDoc, getDoc, updateDoc, collection, onSnapshot, deleteDoc, getDocs, addDoc } from 'firebase/firestore';
 // Replaced lucide icons with standard icon names for theme consistency
 import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus, X, Store, Trash2 } from 'lucide-react'; 
 
@@ -15,22 +11,22 @@ import Toast from './components/Toast';
 import ToastContainer from './components/ToastContainer';
 import ConfirmModal from './components/ConfirmModal';
 import LoadingSpinner from './components/LoadingSpinner';
+import SelectField from './components/SelectField';
 
 // Import constants
-import { INITIAL_STOCK_LIST, FIREBASE_CONFIG, APP_CONFIG, USER_ROLES, VIEWS, TOAST_TYPES, MODAL_COLORS } from './constants';
+import { INITIAL_STOCK_LIST, APP_CONFIG, USER_ROLES, VIEWS, TOAST_TYPES, MODAL_COLORS } from './constants';
 
 // Import utility functions
 import { validateStockData, validateUserCredentials, validateStoreData, RateLimiter } from './utils/validation-utils';
 import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils';
 import { storageBackup, recoverFromBackup } from './utils/storage-backup';
 import { perfMonitor, getMemoryInfo, getNetworkSpeed } from './utils/performance-monitor'; 
+import { useFirebase } from './hooks/useFirebase';
 
 // --- Global Constants and Firebase Setup ---
 
 // These global variables are provided by the canvas environment
 const appId = typeof __app_id !== 'undefined' ? __app_id : APP_CONFIG.DEFAULT_APP_ID;
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : FIREBASE_CONFIG;
-const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
 // --- Utility Functions ---
 
@@ -51,6 +47,83 @@ const getYesterdayDate = () => {
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
 };
+
+// --- Reducer ---
+
+const initialState = {
+    stores: {},
+    showAuthModal: false,
+    toasts: [],
+    confirmDialog: null,
+    selectedStoreId: '',
+    view: VIEWS.HOME,
+    isSaving: false,
+    loadingData: false,
+    hasSaveError: false,
+    appError: null,
+    retryCount: 0,
+    isRetrying: false,
+    processStep: 'initializing',
+    storesLoaded: false,
+    isInitializing: true,
+    isOnline: navigator.onLine,
+    masterStockList: INITIAL_STOCK_LIST,
+    currentStock: getEmptyStock(INITIAL_STOCK_LIST),
+    yesterdayStock: getEmptyStock(INITIAL_STOCK_LIST),
+    orderQuantities: getEmptyStock(INITIAL_STOCK_LIST),
+    selectedDate: getTodayDate(),
+};
+
+function reducer(state, action) {
+    switch (action.type) {
+        case 'SET_STORES':
+            return { ...state, stores: action.payload };
+        case 'SET_SHOW_AUTH_MODAL':
+            return { ...state, showAuthModal: action.payload };
+        case 'ADD_TOAST':
+            return { ...state, toasts: [...state.toasts, action.payload] };
+        case 'REMOVE_TOAST':
+            return { ...state, toasts: state.toasts.filter(toast => toast.id !== action.payload) };
+        case 'SET_CONFIRM_DIALOG':
+            return { ...state, confirmDialog: action.payload };
+        case 'SET_SELECTED_STORE_ID':
+            return { ...state, selectedStoreId: action.payload };
+        case 'SET_VIEW':
+            return { ...state, view: action.payload };
+        case 'SET_IS_SAVING':
+            return { ...state, isSaving: action.payload };
+        case 'SET_LOADING_DATA':
+            return { ...state, loadingData: action.payload };
+        case 'SET_HAS_SAVE_ERROR':
+            return { ...state, hasSaveError: action.payload };
+        case 'SET_APP_ERROR':
+            return { ...state, appError: action.payload };
+        case 'SET_RETRY_COUNT':
+            return { ...state, retryCount: action.payload };
+        case 'SET_IS_RETRYING':
+            return { ...state, isRetrying: action.payload };
+        case 'SET_PROCESS_STEP':
+            return { ...state, processStep: action.payload };
+        case 'SET_STORES_LOADED':
+            return { ...state, storesLoaded: action.payload };
+        case 'SET_IS_INITIALIZING':
+            return { ...state, isInitializing: action.payload };
+        case 'SET_IS_ONLINE':
+            return { ...state, isOnline: action.payload };
+        case 'SET_MASTER_STOCK_LIST':
+            return { ...state, masterStockList: action.payload };
+        case 'SET_CURRENT_STOCK':
+            return { ...state, currentStock: action.payload };
+        case 'SET_YESTERDAY_STOCK':
+            return { ...state, yesterdayStock: action.payload };
+        case 'SET_ORDER_QUANTITIES':
+            return { ...state, orderQuantities: action.payload };
+        case 'SET_SELECTED_DATE':
+            return { ...state, selectedDate: action.payload };
+        default:
+            return state;
+    }
+}
 
 // --- Admin Store Management Component (NEW) ---
 const InputField = ({ label, type = 'text', value, onChange, placeholder, minLength }) => (
@@ -106,7 +179,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
             // Note: Related data (stock entries, user assignments) will be cleaned 
             // up implicitly as the store ID will no longer be valid in the UI lists.
         } catch (error) {
-            console.error("Error deleting store:", error);
+            handleError(error, 'Store Deletion');
             showToast(`Failed to delete store: ${error.message}`, 'error');
         }
     };
@@ -114,7 +187,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     const handleDeleteClick = async (storeId, storeName) => {
         const confirmed = await showConfirm({
             title: 'Delete Store',
-            message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`,
+            message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`, 
             confirmText: 'Delete',
             cancelText: 'Cancel',
             confirmColor: 'red'
@@ -177,6 +250,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 };
 
 
+
 // --- Stock Item Management Component ---
 
 const StockItemManagementView = ({ masterStockList, setMasterStockList, showToast, showConfirm }) => {
@@ -230,7 +304,7 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
     const handleDeleteItem = async (category, itemName) => {
         const confirmed = await showConfirm({
             title: 'Delete Item',
-            message: `Are you sure you want to delete "${itemName}" from ${category}? This action cannot be undone.`,
+            message: `Are you sure you want to delete "${itemName}" from ${category}? This action cannot be undone.`, 
             confirmText: 'Delete',
             cancelText: 'Cancel',
             confirmColor: 'red'
@@ -249,19 +323,6 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
             }
         }
     };
-
-    const SelectField = ({ label, value, onChange, children }) => (
-        <label className="flex flex-col min-w-40 flex-1">
-            <p className="text-sm font-semibold text-orange-700/80 leading-normal pb-2">{label}</p>
-            <select
-                className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 placeholder:text-gray-400 p-3 text-base font-normal leading-normal text-gray-900 transition-all duration-300"
-                value={value}
-                onChange={onChange}
-            >
-                {children}
-            </select>
-        </label>
-    );
 
     return (
         <div className="p-4 space-y-6">
@@ -331,6 +392,7 @@ const StockItemManagementView = ({ masterStockList, setMasterStockList, showToas
     );
 };
 
+
 // --- Admin User Management Component ---
 
 const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
@@ -382,19 +444,6 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         }
     };
 
-    const SelectField = ({ label, value, onChange, children }) => (
-        <label className="flex flex-col min-w-40 flex-1">
-            <p className="text-sm font-semibold text-orange-700/80 leading-normal pb-2">{label}</p>
-            <select
-                className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 placeholder:text-gray-400 p-3 text-base font-normal leading-normal text-gray-900 transition-all duration-300"
-                value={value}
-                onChange={onChange}
-            >
-                {children}
-            </select>
-        </label>
-    );
-
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
@@ -427,8 +476,8 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                         value={newUserRole}
                         onChange={(e) => setNewUserRole(e.target.value)}
                     >
-                        <option value="staff">Staff</option>
-                        <option value="admin">Admin</option>
+                        <option value={USER_ROLES.STAFF}>Staff</option>
+                        <option value={USER_ROLES.ADMIN}>Admin</option>
                     </SelectField>
                     <SelectField
                         label="Store"
@@ -836,64 +885,30 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
 // --- Main Application Component ---
 
 const App = () => {
-    // Firebase State
-    const [db, setDb] = useState(null);
-    const [auth, setAuth] = useState(null);
-    const [userId, setUserId] = useState(null);
-    const [isAuthReady, setIsAuthReady] = useState(false); // Start as NOT ready
-    const [userRole, setUserRole] = useState(null); 
-    const [userStoreId, setUserStoreId] = useState(null); 
-    const [stores, setStores] = useState({}); // Dynamic stores state
-
-    // UI State
-    const [showAuthModal, setShowAuthModal] = useState(false); // Start with auth modal hidden
-    const [isFirstUser, setIsFirstUser] = useState(false);
-    
-    // Toast State
-    const [toasts, setToasts] = useState([]);
-    const [confirmDialog, setConfirmDialog] = useState(null);
-    
-    // App State
-    const [selectedStoreId, setSelectedStoreId] = useState(''); 
-    const [view, setView] = useState(VIEWS.HOME); 
-    const [isSaving, setIsSaving] = useState(false);
-    const [loadingData, setLoadingData] = useState(false);
-    const [hasSaveError, setHasSaveError] = useState(false);
-    
-    // Error Handling State
-    const [appError, setAppError] = useState(null);
-    const [retryCount, setRetryCount] = useState(0);
-    const [isRetrying, setIsRetrying] = useState(false);
-    
-    // Process Flow State
-    const [processStep, setProcessStep] = useState('initializing'); // initializing, authenticating, loading-data, ready, error
-    const [storesLoaded, setStoresLoaded] = useState(false); // Track if stores have been attempted to load
-    const [isInitializing, setIsInitializing] = useState(true); // Track Firebase initialization
-    const [isOnline, setIsOnline] = useState(navigator.onLine); // Track network status
-
-    // Data State
-    const [masterStockList, setMasterStockList] = useState(INITIAL_STOCK_LIST);
-    const [currentStock, setCurrentStock] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
-    const [yesterdayStock, setYesterdayStock] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
-    const [orderQuantities, setOrderQuantities] = useState(() => getEmptyStock(INITIAL_STOCK_LIST));
-    const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
+    const { db, auth, userId, isAuthReady, userRole, userStoreId, isFirstUser } = useFirebase();
+    const [state, dispatch] = useReducer(reducer, initialState);
+    const { 
+        stores, showAuthModal, toasts, confirmDialog, selectedStoreId, view, isSaving, loadingData, hasSaveError, 
+        appError, retryCount, isRetrying, processStep, storesLoaded, isInitializing, isOnline, 
+        masterStockList, currentStock, yesterdayStock, orderQuantities, selectedDate 
+    } = state;
     
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
         console.error(`Error in ${context}:`, error);
-        setAppError({
+        dispatch({ type: 'SET_APP_ERROR', payload: {
             message: error.message || 'An unexpected error occurred',
             context,
             timestamp: new Date().toISOString(),
             retryable: true
-        });
-        setProcessStep('error');
+        }});
+        dispatch({ type: 'SET_PROCESS_STEP', payload: 'error' });
     };
 
     const clearError = () => {
-        setAppError(null);
-        setRetryCount(0);
-        setIsRetrying(false);
+        dispatch({ type: 'SET_APP_ERROR', payload: null });
+        dispatch({ type: 'SET_RETRY_COUNT', payload: 0 });
+        dispatch({ type: 'SET_IS_RETRYING', payload: false });
     };
 
     const retryOperation = async (operation, maxRetries = 3) => {
@@ -902,8 +917,8 @@ const App = () => {
             return false;
         }
 
-        setIsRetrying(true);
-        setRetryCount(prev => prev + 1);
+        dispatch({ type: 'SET_IS_RETRYING', payload: true });
+        dispatch({ type: 'SET_RETRY_COUNT', payload: state.retryCount + 1 });
         
         try {
             await operation();
@@ -919,101 +934,22 @@ const App = () => {
                 return false;
             }
         } finally {
-            setIsRetrying(false);
+            dispatch({ type: 'SET_IS_RETRYING', payload: false });
         }
     };
     
     // No hardcoded stores - only use Firestore data 
 
-    // 1. Firebase Initialization and Authentication 
-    useEffect(() => {
-        const initializeFirebase = async () => {
-            try {
-                setProcessStep('initializing');
-                const app = initializeApp(firebaseConfig);
-                const firestore = getFirestore(app);
-                const authentication = getAuth(app);
-                setDb(firestore);
-                setAuth(authentication);
-                setIsInitializing(false);
-
-                // --- Securely check if the app has been set up ---
-                const setupDocRef = doc(firestore, `artifacts/${appId}/public`, 'config');
-                const setupDocSnap = await getDoc(setupDocRef);
-
-                // If the setup document does NOT exist, it's the first run.
-                const isFirstRun = !setupDocSnap.exists();
-                setIsFirstUser(isFirstRun);
-                console.log("Is this the first user signup?", isFirstRun);
-
-                // --- User Auth and Role Fetching ---
-                const fetchUserProfile = async (user, username = null) => {
-                    try {
-                        if (!user || user.isAnonymous) {
-                            setUserRole(null);
-                            setUserStoreId(null);
-                            return;
-                        }
-                        setUserId(user.uid);
-                        const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile');
-                        const roleSnap = await getDoc(roleDocRef);
-                        if (roleSnap.exists()) {
-                            setUserRole(roleSnap.data().role);
-                            setUserStoreId(roleSnap.data().storeId || null);
-                        } else {
-                            const defaultRole = USER_ROLES.ADMIN; 
-                            await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
-                            setUserRole(defaultRole);
-                            setUserStoreId(null);
-                        }
-                    } catch (error) {
-                        handleError(error, 'User Profile Fetch');
-                    }
-                };
-
-                const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
-                    try {
-                        if (!user) {
-                            setUserId(null);
-                            setUserRole(null);
-                            setUserStoreId(null);
-                            setShowAuthModal(true);
-                            setProcessStep('authenticating');
-                            setIsAuthReady(true);
-                            return;
-                        }
-                        
-                        setUserId(user.uid);
-                        setShowAuthModal(false);
-                        setProcessStep('loading-data');
-                        
-                        await fetchUserProfile(user);
-                        setIsAuthReady(true);
-                        setProcessStep('ready');
-                    } catch (error) {
-                        handleError(error, 'Authentication State Change');
-                    }
-                });
-
-                return () => unsubscribeAuth();
-            } catch (error) {
-                handleError(error, 'Firebase Initialization');
-            }
-        };
-
-        initializeFirebase();
-    }, []);
-
     // Network Status Monitoring
     useEffect(() => {
         const handleOnline = () => {
-            setIsOnline(true);
+            dispatch({ type: 'SET_IS_ONLINE', payload: true });
             console.log('Network: Online');
             showToast('Connection restored!', 'success');
         };
 
         const handleOffline = () => {
-            setIsOnline(false);
+            dispatch({ type: 'SET_IS_ONLINE', payload: false });
             console.log('Network: Offline');
             showToast('Connection lost. Some features may not work.', 'warning');
         };
@@ -1049,9 +985,9 @@ const App = () => {
 
     // 2. Real-time Store Fetching (Runs only after DB, Auth, user authentication, AND role is loaded)
     useEffect(() => {
-        if (!db || !isAuthReady || !userId || !role) return; // Wait for role to be loaded before fetching stores
+        if (!db || !isAuthReady || !userId || !userRole) return; // Wait for role to be loaded before fetching stores
 
-        console.log("Starting store fetch - user authenticated with role:", role);
+        console.log("Starting store fetch - user authenticated with role:", userRole);
         const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
         
         const unsubscribeStores = onSnapshot(storesColRef, async (snapshot) => {
@@ -1062,8 +998,8 @@ const App = () => {
                 });
 
                 console.log("Stores loaded:", Object.keys(newStores).length, "stores");
-                setStores(newStores);
-                setStoresLoaded(true); // Mark stores as loaded
+                dispatch({ type: 'SET_STORES', payload: newStores });
+                dispatch({ type: 'SET_STORES_LOADED', payload: true }); // Mark stores as loaded
                 clearError(); // Clear any previous errors
             } catch (error) {
                 handleError(error, 'Store Data Processing');
@@ -1071,8 +1007,8 @@ const App = () => {
         }, (error) => {
             console.error("Error listening to stores:", error);
             handleError(error, 'Store Fetching');
-            setStores({}); // Set empty stores on error
-            setStoresLoaded(true); // Mark stores as loaded even on error
+            dispatch({ type: 'SET_STORES', payload: {} }); // Set empty stores on error
+            dispatch({ type: 'SET_STORES_LOADED', payload: true }); // Mark stores as loaded even on error
         });
 
         return () => {
@@ -1090,7 +1026,7 @@ const App = () => {
                 try {
                     // Try to update existing document first
                     await updateDoc(roleDocRef, { storeId: defaultStoreId });
-                    setUserStoreId(defaultStoreId);
+                    dispatch({ type: 'SET_USER_STORE_ID', payload: defaultStoreId });
                     console.log("Set default storeId for admin:", defaultStoreId);
                 } catch (error) {
                     // If document doesn't exist, create it with setDoc
@@ -1101,7 +1037,7 @@ const App = () => {
                                 storeId: defaultStoreId,
                                 email: auth?.currentUser?.email || null
                             }, { merge: true });
-                            setUserStoreId(defaultStoreId);
+                            dispatch({ type: 'SET_USER_STORE_ID', payload: defaultStoreId });
                             console.log("Created profile with default storeId for admin:", defaultStoreId);
                         } catch (createError) {
                             console.error("Error creating profile with default storeId:", createError);
@@ -1115,7 +1051,7 @@ const App = () => {
             };
             setDefaultStoreId();
         }
-    }, [role, userStoreId, stores, db, userId, appId, auth]);
+    }, [userRole, userStoreId, stores, db, userId, appId, auth]);
 
     // Logic to update user's initial store ID if their profile was created before stores loaded
     useEffect(() => {
@@ -1136,7 +1072,7 @@ const App = () => {
                         
                         // Try to update existing document first
                         await updateDoc(roleDocRef, { storeId: newStoreId });
-                        setUserStoreId(newStoreId);
+                        dispatch({ type: 'SET_USER_STORE_ID', payload: newStoreId });
                         console.log(`Updated user store ID from ${userStoreId} to ${newStoreId}`);
                     } catch (error) {
                         // If document doesn't exist, create it with setDoc
@@ -1151,11 +1087,11 @@ const App = () => {
                                 const newStoreId = availableStores[0];
                                 const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
                                 await setDoc(roleDocRef, { 
-                                    role: role || 'staff', 
+                                    role: userRole || 'staff', 
                                     storeId: newStoreId,
                                     email: auth?.currentUser?.email || null
                                 }, { merge: true });
-                                setUserStoreId(newStoreId);
+                                dispatch({ type: 'SET_USER_STORE_ID', payload: newStoreId });
                                 console.log(`Created profile with store ID: ${newStoreId}`);
                             } catch (createError) {
                                 console.error("Error creating profile with new store ID:", createError);
@@ -1170,7 +1106,7 @@ const App = () => {
                 updateStoreId();
             }
         }
-    }, [stores, db, auth, userId, appId, role]); // Added role to dependencies
+    }, [stores, db, auth, userId, appId, userRole]); // Added role to dependencies
 
 
     const calculateSold = useCallback((category, item) => {
@@ -1198,7 +1134,7 @@ const App = () => {
     const fetchStockData = useCallback(async (storeId) => {
         if (!db || !storeId) return;
 
-        setLoadingData(true);
+        dispatch({ type: 'SET_LOADING_DATA', payload: true });
         const todayDate = getTodayDate();
         const yesterdayDate = getYesterdayDate();
 
@@ -1209,29 +1145,29 @@ const App = () => {
             const todaySnap = await getDoc(todayDocRef);
             if (todaySnap.exists()) {
                 const data = todaySnap.data().stock;
-                setCurrentStock(data);
+                dispatch({ type: 'SET_CURRENT_STOCK', payload: data });
             } else {
-                setCurrentStock(getEmptyStock(masterStockList));
-                setOrderQuantities(getEmptyStock(masterStockList));
+                dispatch({ type: 'SET_CURRENT_STOCK', payload: getEmptyStock(masterStockList) });
+                dispatch({ type: 'SET_ORDER_QUANTITIES', payload: getEmptyStock(masterStockList) });
             }
 
             const yesterdaySnap = await getDoc(yesterdayDocRef);
             if (yesterdaySnap.exists()) {
-                setYesterdayStock(yesterdaySnap.data().stock);
+                dispatch({ type: 'SET_YESTERDAY_STOCK', payload: yesterdaySnap.data().stock });
             } else {
-                setYesterdayStock(getEmptyStock(masterStockList));
+                dispatch({ type: 'SET_YESTERDAY_STOCK', payload: getEmptyStock(masterStockList) });
             }
         } catch (e) {
             console.error("Error fetching stock data:", e);
         } finally {
-            setLoadingData(false);
+            dispatch({ type: 'SET_LOADING_DATA', payload: false });
         }
     }, [db, masterStockList]);
 
     // Re-fetch data whenever store or auth state changes
     useEffect(() => {
         if (userRole === 'staff' && userStoreId && selectedStoreId !== userStoreId) {
-            setSelectedStoreId(userStoreId);
+            dispatch({ type: 'SET_SELECTED_STORE_ID', payload: userStoreId });
         }
 
         if (db && userId && selectedStoreId) {
@@ -1242,8 +1178,8 @@ const App = () => {
     // Prevent staff from accessing wrong stores via render-time redirect
     useEffect(() => {
         if (userRole === 'staff' && selectedStoreId && selectedStoreId !== userStoreId && view !== 'home') {
-            setSelectedStoreId(userStoreId);
-            setView('entry');
+            dispatch({ type: 'SET_SELECTED_STORE_ID', payload: userStoreId });
+            dispatch({ type: 'SET_VIEW', payload: 'entry' });
         }
     }, [userRole, selectedStoreId, userStoreId, view]);
 
@@ -1272,7 +1208,7 @@ const App = () => {
             // Confirmation
             const confirmed = await showConfirm({
                 title: 'Confirm Stock Entry',
-                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems: ${totalItems}\nTotal: ${totalQuantity}\n\nSave?`,
+                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems: ${totalItems}\nTotal: ${totalQuantity}\n\nSave?`, 
                 confirmText: 'Save Stock',
                 cancelText: 'Cancel',
                 confirmColor: 'orange'
@@ -1280,7 +1216,7 @@ const App = () => {
 
             if (!confirmed) return;
 
-            setIsSaving(true);
+            dispatch({ type: 'SET_IS_SAVING', payload: true });
 
             // SAVE WITH PERFORMANCE MONITORING AND ENHANCED ERROR HANDLING
             await perfMonitor.measureAsync('saveStock', async () => {
@@ -1345,7 +1281,7 @@ const App = () => {
             });
 
             showToast('Stock saved successfully!', 'success');
-            setHasSaveError(false); // Clear any previous save errors
+            dispatch({ type: 'SET_HAS_SAVE_ERROR', payload: false }); // Clear any previous save errors
         } catch (error) {
             console.error('Stock save error:', error);
             
@@ -1369,19 +1305,19 @@ const App = () => {
             
             // Set save error state for connection issues
             if (isConnectionError) {
-                setHasSaveError(true);
+                dispatch({ type: 'SET_HAS_SAVE_ERROR', payload: true });
             }
             
             handleError(error, 'Stock Saving');
             showToast(errorMessage, 'error');
         } finally {
-            setIsSaving(false);
+            dispatch({ type: 'SET_IS_SAVING', payload: false });
         }
     };
 
     // 6. Data Export Function (Admin Action)
     const exportStockData = useCallback(() => {
-        if (role !== 'admin') {
+        if (userRole !== 'admin') {
             handleError(new Error('Only admins can export data'), 'Data Export');
             return;
         }
@@ -1429,7 +1365,7 @@ const App = () => {
         } catch (error) {
             handleError(error, 'Data Export');
         }
-    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock, masterStockList]);
+    }, [userRole, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock, masterStockList]);
 
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
@@ -1500,26 +1436,26 @@ const App = () => {
     // Toast helper functions
     const showToast = useCallback((message, type = 'success') => {
         const id = Date.now();
-        setToasts(prev => [...prev, { id, message, type }]);
+        dispatch({ type: 'ADD_TOAST', payload: { id, message, type } });
     }, []);
 
     const removeToast = useCallback((id) => {
-        setToasts(prev => prev.filter(toast => toast.id !== id));
+        dispatch({ type: 'REMOVE_TOAST', payload: id });
     }, []);
 
     const showConfirm = useCallback((options) => {
         return new Promise((resolve) => {
-            setConfirmDialog({
+            dispatch({ type: 'SET_CONFIRM_DIALOG', payload: {
                 ...options,
                 onConfirm: () => {
-                    setConfirmDialog(null);
+                    dispatch({ type: 'SET_CONFIRM_DIALOG', payload: null });
                     resolve(true);
                 },
                 onCancel: () => {
-                    setConfirmDialog(null);
+                    dispatch({ type: 'SET_CONFIRM_DIALOG', payload: null });
                     resolve(false);
                 }
-            });
+            }});
         });
     }, []);
 
@@ -1530,8 +1466,8 @@ const App = () => {
                 const roleSnap = await getDoc(roleDocRef);
                 
                 if (roleSnap.exists()) {
-                    setUserRole(roleSnap.data().role);
-                    setUserStoreId(roleSnap.data().storeId || null);
+                    dispatch({ type: 'SET_USER_ROLE', payload: roleSnap.data().role });
+                    dispatch({ type: 'SET_USER_STORE_ID', payload: roleSnap.data().storeId || null });
                 } else {
                     // This is the first admin registration flow
                     const defaultRole = 'admin'; 
@@ -1548,11 +1484,11 @@ const App = () => {
                         timestamp: new Date().toISOString()
                     });
 
-                    setUserRole(defaultRole);
-                    setUserStoreId(defaultStoreId);
-                    setIsFirstUser(false); // Update state to prevent future registrations
+                    dispatch({ type: 'SET_USER_ROLE', payload: defaultRole });
+                    dispatch({ type: 'SET_USER_STORE_ID', payload: defaultStoreId });
+                    dispatch({ type: 'SET_IS_FIRST_USER', payload: false }); // Update state to prevent future registrations
                 }
-                setShowAuthModal(false);
+                dispatch({ type: 'SET_SHOW_AUTH_MODAL', payload: false });
             };
             fetchProfile();
         }
@@ -1619,12 +1555,12 @@ const App = () => {
     // --- View Rendering Logic ---
 
     // Show error screen if there's an error
-    if (error) {
+    if (appError) {
         return (
             <>
                 <ProcessFlowDisplay step="error" />
                 <ErrorDisplay 
-                    error={error} 
+                    error={appError} 
                     onRetry={() => retryOperation(() => window.location.reload())}
                     onDismiss={clearError}
                 />
@@ -1654,7 +1590,7 @@ const App = () => {
     }
 
     // If no user is authenticated, show login screen immediately
-    if (!userId || !role) {
+    if (!userId || !userRole) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
@@ -1663,7 +1599,7 @@ const App = () => {
                         <p className="text-gray-600 mb-6">Inventory Management System</p>
                         <p className="text-gray-700 font-medium mb-4">Please log in or register the Super Admin account to access the app features.</p>
                         <button
-                            onClick={() => setShowAuthModal(true)}
+                            onClick={() => dispatch({ type: 'SET_SHOW_AUTH_MODAL', payload: true })}
                             className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition duration-150 shadow-md flex items-center justify-center text-lg font-display"
                         >
                             <User className="w-5 h-5 mr-2" /> Log In / Register
@@ -1674,7 +1610,7 @@ const App = () => {
                 {showAuthModal && (
                     <AuthModal 
                         auth={auth} 
-                        onClose={() => setShowAuthModal(false)}
+                        onClose={() => dispatch({ type: 'SET_SHOW_AUTH_MODAL', payload: false })}
                         onLoginSuccess={handleAuthSuccess}
                         isFirstUser={isFirstUser}
                     />
@@ -1684,7 +1620,7 @@ const App = () => {
     }
 
     // If stores haven't loaded yet but user is authenticated, show minimal loading
-    if (!storesLoaded && userId && role) {
+    if (!storesLoaded && userId && userRole) {
         return (
             <div className="min-h-screen bg-gray-50 flex items-center justify-center">
                 <div className="text-center">
@@ -1700,7 +1636,7 @@ const App = () => {
         <div className="p-4 space-y-6">
              <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-lg border border-gray-100">
                 <h2 className="text-3xl font-bold font-display text-orange-600 mb-1">Sujata Mastani</h2>
-                <p className="text-gray-600 text-sm">{role ? `Logged in as ${role.toUpperCase()}. Select your outlet.` : 'Secure Login Required'}</p>
+                <p className="text-gray-600 text-sm">{userRole ? `Logged in as ${userRole.toUpperCase()}. Select your outlet.` : 'Secure Login Required'}</p>
             </div>
 
             <div className="space-y-4">
@@ -1713,9 +1649,7 @@ const App = () => {
                         return (
                             <div 
                                 key={id} 
-                                className={`bg-white rounded-xl p-4 shadow-lg transition-shadow hover:shadow-xl border-l-4 ${
-                                    isAssignedToStore ? 'border-orange-600' : 'border-gray-300 opacity-80'
-                                }`}
+                                className={`bg-white rounded-xl p-4 shadow-lg transition-shadow hover:shadow-xl border-l-4 ${isAssignedToStore ? 'border-orange-600' : 'border-gray-300 opacity-80'}`}
                             >
                                 <div className="flex items-center gap-3">
                                     <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600">
@@ -1729,14 +1663,14 @@ const App = () => {
                                 <div className="border-t border-gray-200 mt-3 pt-3">
                                     <div className="flex flex-wrap gap-3">
                                         <button
-                                            onClick={() => { setSelectedStoreId(id); setView('entry'); }}
+                                            onClick={() => { dispatch({ type: 'SET_SELECTED_STORE_ID', payload: id }); dispatch({ type: 'SET_VIEW', payload: 'entry' }); }}
                                             className="flex flex-1 items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700"
                                         >
                                             <List className="w-4 h-4 mr-2" /> Stock Entry
                                         </button>
                                         {userRole === 'admin' && (
                                             <button
-                                                onClick={() => { setSelectedStoreId(id); setView('admin'); }}
+                                                onClick={() => { dispatch({ type: 'SET_SELECTED_STORE_ID', payload: id }); dispatch({ type: 'SET_VIEW', payload: 'admin' }); }}
                                                 className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50"
                                             >
                                                 <User className="w-4 h-4 mr-2" /> Admin Functions
@@ -1763,7 +1697,7 @@ const App = () => {
                                 </p>
                                 {userRole === 'admin' && (
                                     <button
-                                        onClick={() => setView('storemanager')}
+                                        onClick={() => dispatch({ type: 'SET_VIEW', payload: 'storemanager' })}
                                         className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md flex items-center justify-center mx-auto"
                                     >
                                         <Store className="w-5 h-5 mr-2" /> Create Store
@@ -1787,7 +1721,7 @@ const App = () => {
         
         const AdminButton = ({ icon: Icon, label, viewName }) => (
             <button
-                onClick={() => setView(viewName)}
+                onClick={() => dispatch({ type: 'SET_VIEW', payload: viewName })}
                 className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl border-l-4 border-orange-600 text-center w-full"
             >
                 <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 mb-3">
@@ -1823,7 +1757,7 @@ const App = () => {
                     icon={Home}
                     label="Home"
                     active={currentView === 'home'}
-                    onClick={() => { setView('home'); setSelectedStoreId(''); }}
+                    onClick={() => { dispatch({ type: 'SET_VIEW', payload: 'home' }); dispatch({ type: 'SET_SELECTED_STORE_ID', payload: '' }); }}
                 />
 
                 {selectedStoreId && (
@@ -1831,7 +1765,7 @@ const App = () => {
                         icon={List}
                         label="Entry"
                         active={currentView === 'entry'}
-                        onClick={() => setView('entry')}
+                        onClick={() => dispatch({ type: 'SET_VIEW', payload: 'entry' })}
                     />
                 )}
 
@@ -1841,19 +1775,19 @@ const App = () => {
                             icon={Store} // New Store Management Button
                             label="Stores"
                             active={currentView === 'storemanager'}
-                            onClick={() => setView('storemanager')}
+                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'storemanager' })}
                         />
                         <NavButton
                             icon={UserPlus}
                             label="Users"
                             active={currentView === 'usermanager'}
-                            onClick={() => setView('usermanager')}
+                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'usermanager' })}
                         />
                         <NavButton
                             icon={List}
                             label="Items"
                             active={currentView === 'itemmanager'}
-                            onClick={() => setView('itemmanager')}
+                            onClick={() => dispatch({ type: 'SET_VIEW', payload: 'itemmanager' })}
                         />
                         
                         {selectedStoreId && (
@@ -1862,13 +1796,13 @@ const App = () => {
                                     icon={TrendingDown}
                                     label="Sold"
                                     active={currentView === 'sold'}
-                                    onClick={() => setView('sold')}
+                                    onClick={() => dispatch({ type: 'SET_VIEW', payload: 'sold' })}
                                 />
                                 <NavButton
                                     icon={ShoppingCart}
                                     label="Order"
                                     active={currentView === 'order'}
-                                    onClick={() => setView('order')}
+                                    onClick={() => dispatch({ type: 'SET_VIEW', payload: 'order' })}
                                 />
                             </>
                         )}
@@ -1882,9 +1816,7 @@ const App = () => {
         <button
             onClick={onClick}
             disabled={disabled}
-            className={`flex flex-col items-center p-1 transition duration-200 w-1/5 ${
-                active ? 'text-orange-600 font-bold' : 'text-gray-500 hover:text-orange-500'
-            } ${disabled ? 'opacity-50' : ''}`}
+            className={`flex flex-col items-center p-1 transition duration-200 w-1/5 ${active ? 'text-orange-600 font-bold' : 'text-gray-500 hover:text-orange-500'} ${disabled ? 'opacity-50' : ''}`}
         >
             <Icon className="w-6 h-6" />
             <span className="text-xs mt-0.5">{label}</span>
@@ -1913,24 +1845,24 @@ const App = () => {
                 return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} />;
             case 'itemmanager':
                 if (!isAdmin) return <HomeView />;
-                return <StockItemManagementView masterStockList={masterStockList} setMasterStockList={setMasterStockList} showToast={showToast} showConfirm={showConfirm} />;
+                return <StockItemManagementView masterStockList={masterStockList} setMasterStockList={(list) => dispatch({ type: 'SET_MASTER_STOCK_LIST', payload: list })} showToast={showToast} showConfirm={showConfirm} />;
             case 'entry':
                 return (
                     <StockEntryView
                         storeId={storeName}
                         stockData={currentStock}
-                        setStockData={setCurrentStock}
+                        setStockData={(data) => dispatch({ type: 'SET_CURRENT_STOCK', payload: data })}
                         saveStock={saveStock}
                         isSaving={isSaving}
                         selectedDate={selectedDate}
-                        setSelectedDate={setSelectedDate}
+                        setSelectedDate={(date) => dispatch({ type: 'SET_SELECTED_DATE', payload: date })}
                         showToast={showToast}
                         masterStockList={masterStockList}
                         hasSaveError={hasSaveError}
                     />
                 );
             case 'sold':
-                if (!isAdmin) return <HomeView />; 
+                if (!isAdmin) return <HomeView />;
                 return (
                     <StockSoldView
                         currentStock={currentStock}
@@ -1941,12 +1873,12 @@ const App = () => {
                     />
                 );
             case 'order':
-                if (!isAdmin) return <HomeView />; 
+                if (!isAdmin) return <HomeView />;
                 return (
                     <OrderingView
                         currentStock={currentStock}
                         orderQuantities={orderQuantities}
-                        setOrderQuantities={setOrderQuantities}
+                        setOrderQuantities={(quantities) => dispatch({ type: 'SET_ORDER_QUANTITIES', payload: quantities })}
                         generateOrderOutput={generateOrderOutput}
                         showToast={showToast}
                         masterStockList={masterStockList}
@@ -1960,7 +1892,7 @@ const App = () => {
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
             {/* Only show ProcessFlowDisplay when not ready or in error state */}
-            {(processStep !== 'ready' || error) && <ProcessFlowDisplay step={processStep} />}
+            {(processStep !== 'ready' || appError) && <ProcessFlowDisplay step={processStep} />}
             
             {/* Toast Container and Confirmation Modal */}
             <ToastContainer toasts={toasts} removeToast={removeToast} />
