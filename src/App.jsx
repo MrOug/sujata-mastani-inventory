@@ -178,6 +178,334 @@ const SelectField = ({ label, value, onChange, children }) => (
     </label>
 );
 
+// --- Sub-Views and Components ---
+
+const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
+    const [isRegister, setIsRegister] = useState(isFirstUser);
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [error, setError] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleSubmit = async (e) => {
+        e.preventDefault();
+        setError('');
+        setLoading(true);
+        if (password.length < 6) {
+            setError("Password must be at least 6 characters.");
+            setLoading(false);
+            return;
+        }
+        const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+        try {
+            const userCredential = isRegister
+                ? await createUserWithEmailAndPassword(auth, email, password)
+                : await signInWithEmailAndPassword(auth, email, password);
+            onLoginSuccess(userCredential.user, username.trim());
+        } catch (err) {
+            setError(err.message.replace('Firebase: Error (auth/', '').replace(').', ''));
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <Modal title={isRegister ? "Admin Registration" : "Login"} onClose={onClose}>
+            <form onSubmit={handleSubmit} className="space-y-4">
+                <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff.kothrud" />
+                <InputField label="Password (Min 6 chars)" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="******" minLength="6" />
+                {error && <p className="text-red-500 text-sm">{error}</p>}
+                <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{loading ? 'Processing...' : (isRegister ? 'Register' : 'Log In')}</button>
+            </form>
+            {!isFirstUser && <button onClick={() => setIsRegister(p => !p)} className="w-full mt-4 text-sm text-orange-600">{isRegister ? "Already have an account? Log In" : "Need to register? Sign Up"}</button>}
+        </Modal>
+    );
+};
+
+const StockEntryView = ({ storeName, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, masterStockList, hasSaveError }) => (
+    <div className="p-4 space-y-6">
+        <h2 className="text-2xl font-bold font-display text-gray-900">Closing Stock for {storeName}</h2>
+        <InputField label="Select Date" type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
+        {Object.keys(masterStockList).map(category => (
+            <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
+                <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{category}</h3>
+                {masterStockList[category].map(item => (
+                    <StockInput key={`${category}-${item}`} label={item} value={stockData[`${category}-${item}`]} onChange={val => setStockData(p => ({ ...p, [`${category}-${item}`]: val }))} />
+                ))}
+            </div>
+        ))}
+        <button onClick={saveStock} disabled={isSaving} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{isSaving ? 'Saving...' : 'Save Stock'}</button>
+        {hasSaveError && <button onClick={saveStock} className="w-full mt-2 py-2 bg-red-600 text-white font-bold rounded-lg">Retry Save</button>}
+    </div>
+);
+
+const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => (
+    <div className="p-4 space-y-6">
+        <h2 className="text-2xl font-bold font-display">Stock Sold Report</h2>
+        <div className="text-center p-6 bg-white rounded-xl shadow-lg">
+            <p className="text-6xl font-extrabold text-orange-600">{soldStockSummary}</p>
+            <p className="text-base text-gray-600">Total Units Sold Today</p>
+        </div>
+        {Object.keys(masterStockList).map(category => (
+            <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
+                <h3 className="text-lg font-bold text-red-600 border-b pb-2 mb-3">{category}</h3>
+                {masterStockList[category].map(item => {
+                    const key = `${category}-${item}`;
+                    const sold = calculateSold(key);
+                    return (
+                        <div key={key} className={`flex justify-between items-center p-3 rounded-lg ${sold < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                            <div>
+                                <p className="font-semibold">{item}</p>
+                                <p className="text-xs text-gray-500">Yst: {yesterdayStock[key] || 0} | Cur: {currentStock[key] || 0}</p>
+                            </div>
+                            <p className={`text-2xl font-bold ${sold < 0 ? 'text-red-700' : 'text-orange-600'}`}>{sold}</p>
+                        </div>
+                    );
+                })}
+            </div>
+        ))}
+    </div>
+);
+
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, stores, selectedStoreId, showToast, masterStockList }) => {
+    const generateOrderOutput = () => {
+      let output = `${stores[selectedStoreId] || 'Selected Store'}\n\n`;
+      Object.keys(masterStockList).forEach(category => {
+          output += `*${category.toUpperCase()}*\n`;
+          masterStockList[category].forEach(item => {
+              const key = `${category}-${item}`;
+              const qty = orderQuantities[key] || 0;
+              if (qty > 0) {
+                  output += `${item} - ${qty}\n`;
+              }
+          });
+          output += '\n';
+      });
+      return output;
+    };
+
+    const handleCopy = async () => {
+        const output = generateOrderOutput();
+        try {
+            await navigator.clipboard.writeText(output);
+            showToast('Order copied to clipboard!', 'success');
+        } catch (err) {
+            // Fallback for older browsers or insecure contexts
+            const textArea = document.createElement("textarea");
+            textArea.value = output;
+            textArea.style.position = "fixed";
+            textArea.style.top = "-9999px";
+            textArea.style.left = "-9999px";
+            document.body.appendChild(textArea);
+            textArea.focus();
+            textArea.select();
+            try {
+              document.execCommand('copy');
+              showToast('Order copied to clipboard!', 'success');
+            } catch (copyErr) {
+              showToast('Failed to copy. Please copy manually.', 'error');
+            } finally {
+               document.body.removeChild(textArea);
+            }
+        }
+    };
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display">Order Management</h2>
+            {Object.keys(masterStockList).map(category => (
+                <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
+                    <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{category}</h3>
+                    {masterStockList[category].map(item => {
+                        const key = `${category}-${item}`;
+                        return (
+                            <div key={key} className="flex items-center justify-between p-3">
+                                <div>
+                                    <p className="font-semibold">{item}</p>
+                                    <p className="text-xs text-gray-500">Current: {currentStock[key] || 0}</p>
+                                </div>
+                                <input type="number" min="0" value={orderQuantities[key] || ''} onChange={e => setOrderQuantities(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))} className="w-1/3 p-2 text-right border rounded" />
+                            </div>
+                        );
+                    })}
+                </div>
+            ))}
+            <button onClick={handleCopy} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl">Generate & Copy Order</button>
+        </div>
+    );
+};
+
+const AdminUserManagementView = ({ db, appId, stores, auth, showToast }) => {
+    const [username, setUsername] = useState('');
+    const [password, setPassword] = useState('');
+    const [role, setRole] = useState(USER_ROLES.STAFF);
+    const [storeId, setStoreId] = useState(Object.keys(stores)[0] || '');
+    const [loading, setLoading] = useState(false);
+
+    const handleCreate = async e => {
+        e.preventDefault();
+        setLoading(true);
+        const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+        try {
+            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
+            const profileRef = doc(db, `artifacts/${appId}/users/${userCredential.user.uid}/user_config/profile`);
+            await setDoc(profileRef, { role, storeId, username: username.trim() });
+            showToast('User created successfully!', 'success');
+            setUsername(''); setPassword('');
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    return (
+        <form onSubmit={handleCreate} className="p-4 space-y-4">
+            <h2 className="text-2xl font-bold font-display">User Manager</h2>
+            <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} />
+            <InputField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+            <SelectField label="Role" value={role} onChange={e => setRole(e.target.value)}>
+                <option value={USER_ROLES.STAFF}>Staff</option>
+                <option value={USER_ROLES.ADMIN}>Admin</option>
+            </SelectField>
+            <SelectField label="Store" value={storeId} onChange={e => setStoreId(e.target.value)}>
+                {Object.entries(stores).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
+            </SelectField>
+            <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl">{loading ? 'Creating...' : 'Create User'}</button>
+        </form>
+    );
+};
+
+const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
+    const [name, setName] = useState('');
+    const [loading, setLoading] = useState(false);
+
+    const handleAdd = async e => {
+        e.preventDefault();
+        setLoading(true);
+        try {
+            await addDoc(collection(db, `artifacts/${appId}/public/data/stores`), { name: name.trim(), createdAt: new Date().toISOString() });
+            showToast('Store added!', 'success');
+            setName('');
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleDelete = async (id, storeName) => {
+        const confirmed = await showConfirm({ title: 'Delete Store', message: `Delete "${storeName}"?`, confirmColor: 'red' });
+        if (confirmed) {
+            try {
+                await deleteDoc(doc(db, `artifacts/${appId}/public/data/stores`, id));
+                showToast('Store deleted.', 'success');
+            } catch (error) {
+                showToast(error.message, 'error');
+            }
+        }
+    };
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display">Store Manager</h2>
+            <form onSubmit={handleAdd} className="space-y-4">
+                <InputField label="New Store Name" value={name} onChange={e => setName(e.target.value)} />
+                <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Store'}</button>
+            </form>
+            <div>
+                <h3 className="text-lg font-bold mt-6 mb-2">Current Stores</h3>
+                {Object.entries(stores).map(([id, storeName]) => (
+                    <div key={id} className="flex justify-between items-center p-3 bg-white rounded-lg shadow mb-2">
+                        <span>{storeName}</span>
+                        <button onClick={() => handleDelete(id, storeName)} className="text-red-500"><Trash2 /></button>
+                    </div>
+                ))}
+            </div>
+        </div>
+    );
+};
+
+const StockItemManagementView = ({ db, appId, masterStockList, showToast, showConfirm }) => {
+    const [itemName, setItemName] = useState('');
+    const [category, setCategory] = useState('MILKSHAKE');
+    const [loading, setLoading] = useState(false);
+    
+    const stockListRef = doc(db, `artifacts/${appId}/public/config/settings/masterStockList`);
+
+    const handleSave = async (newList) => {
+        setLoading(true);
+        try {
+            await setDoc(stockListRef, { list: newList });
+            showToast('Item list updated!', 'success');
+        } catch (error) {
+            showToast(error.message, 'error');
+        } finally {
+            setLoading(false);
+        }
+    };
+
+    const handleAdd = async e => {
+        e.preventDefault();
+        const newList = { ...masterStockList };
+        newList[category] = [...(newList[category] || []), itemName.trim()];
+        await handleSave(newList);
+        setItemName('');
+    };
+
+    const handleDelete = async (cat, item) => {
+        const confirmed = await showConfirm({ title: 'Delete Item', message: `Delete "${item}"?`, confirmColor: 'red' });
+        if (confirmed) {
+            const newList = { ...masterStockList };
+            newList[cat] = newList[cat].filter(i => i !== item);
+            await handleSave(newList);
+        }
+    };
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display">Stock Item Manager</h2>
+            <form onSubmit={handleAdd} className="space-y-4">
+                <SelectField label="Category" value={category} onChange={e => setCategory(e.target.value)}>
+                    {Object.keys(masterStockList).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                </SelectField>
+                <InputField label="New Item Name" value={itemName} onChange={e => setItemName(e.target.value)} />
+                <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Item'}</button>
+            </form>
+             {Object.keys(masterStockList).map(cat => (
+                <div key={cat} className="bg-white p-4 rounded-xl shadow-lg mt-4">
+                    <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{cat}</h3>
+                    {masterStockList[cat].map(item => (
+                        <div key={item} className="flex justify-between items-center p-2">
+                            <span>{item}</span>
+                            <button onClick={() => handleDelete(cat, item)} className="text-red-500"><Trash2 size={18} /></button>
+                        </div>
+                    ))}
+                </div>
+            ))}
+        </div>
+    );
+};
+
+const NavBar = ({ currentView, setView, role, onHomeClick }) => {
+    const NavButton = ({ icon, label, view, ...props }) => (
+        <button {...props} onClick={() => setView(view)} className={`flex flex-col items-center p-1 w-1/5 ${currentView === view ? 'text-orange-600' : 'text-gray-500'}`}>
+            {React.createElement(icon, { className: "w-6 h-6" })}
+            <span className="text-xs">{label}</span>
+        </button>
+    );
+    return (
+        <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] flex justify-around h-16 max-w-lg mx-auto">
+            <button onClick={onHomeClick} className={`flex flex-col items-center p-1 w-1/5 ${currentView === VIEWS.HOME ? 'text-orange-600' : 'text-gray-500'}`}>
+                <Home className="w-6 h-6" />
+                <span className="text-xs">Home</span>
+            </button>
+            {role === USER_ROLES.ADMIN && <NavButton icon={ShieldCheck} label="Admin" view={VIEWS.ADMIN_FUNCTIONS} />}
+            {/* Add more nav buttons as needed */}
+        </nav>
+    );
+};
+
 // --- Main App Logic ---
 const App = () => {
     // Core State
@@ -511,334 +839,6 @@ const App = () => {
             
             <NavBar currentView={view} setView={setView} role={role} onHomeClick={() => { setView(VIEWS.HOME); setSelectedStoreId(''); }} />
         </div>
-    );
-};
-
-// --- Sub-Views and Components ---
-
-const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
-    const [isRegister, setIsRegister] = useState(isFirstUser);
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [error, setError] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleSubmit = async (e) => {
-        e.preventDefault();
-        setError('');
-        setLoading(true);
-        if (password.length < 6) {
-            setError("Password must be at least 6 characters.");
-            setLoading(false);
-            return;
-        }
-        const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
-        try {
-            const userCredential = isRegister
-                ? await createUserWithEmailAndPassword(auth, email, password)
-                : await signInWithEmailAndPassword(auth, email, password);
-            onLoginSuccess(userCredential.user, username.trim());
-        } catch (err) {
-            setError(err.message.replace('Firebase: Error (auth/', '').replace(').', ''));
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <Modal title={isRegister ? "Admin Registration" : "Login"} onClose={onClose}>
-            <form onSubmit={handleSubmit} className="space-y-4">
-                <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff.kothrud" />
-                <InputField label="Password (Min 6 chars)" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="******" minLength="6" />
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{loading ? 'Processing...' : (isRegister ? 'Register' : 'Log In')}</button>
-            </form>
-            {!isFirstUser && <button onClick={() => setIsRegister(p => !p)} className="w-full mt-4 text-sm text-orange-600">{isRegister ? "Already have an account? Log In" : "Need to register? Sign Up"}</button>}
-        </Modal>
-    );
-};
-
-const StockEntryView = ({ storeName, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, masterStockList, hasSaveError }) => (
-    <div className="p-4 space-y-6">
-        <h2 className="text-2xl font-bold font-display text-gray-900">Closing Stock for {storeName}</h2>
-        <InputField label="Select Date" type="date" value={selectedDate} onChange={e => setSelectedDate(e.target.value)} />
-        {Object.keys(masterStockList).map(category => (
-            <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
-                <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{category}</h3>
-                {masterStockList[category].map(item => (
-                    <StockInput key={`${category}-${item}`} label={item} value={stockData[`${category}-${item}`]} onChange={val => setStockData(p => ({ ...p, [`${category}-${item}`]: val }))} />
-                ))}
-            </div>
-        ))}
-        <button onClick={saveStock} disabled={isSaving} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{isSaving ? 'Saving...' : 'Save Stock'}</button>
-        {hasSaveError && <button onClick={saveStock} className="w-full mt-2 py-2 bg-red-600 text-white font-bold rounded-lg">Retry Save</button>}
-    </div>
-);
-
-const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => (
-    <div className="p-4 space-y-6">
-        <h2 className="text-2xl font-bold font-display">Stock Sold Report</h2>
-        <div className="text-center p-6 bg-white rounded-xl shadow-lg">
-            <p className="text-6xl font-extrabold text-orange-600">{soldStockSummary}</p>
-            <p className="text-base text-gray-600">Total Units Sold Today</p>
-        </div>
-        {Object.keys(masterStockList).map(category => (
-            <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
-                <h3 className="text-lg font-bold text-red-600 border-b pb-2 mb-3">{category}</h3>
-                {masterStockList[category].map(item => {
-                    const key = `${category}-${item}`;
-                    const sold = calculateSold(key);
-                    return (
-                        <div key={key} className={`flex justify-between items-center p-3 rounded-lg ${sold < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
-                            <div>
-                                <p className="font-semibold">{item}</p>
-                                <p className="text-xs text-gray-500">Yst: {yesterdayStock[key] || 0} | Cur: {currentStock[key] || 0}</p>
-                            </div>
-                            <p className={`text-2xl font-bold ${sold < 0 ? 'text-red-700' : 'text-orange-600'}`}>{sold}</p>
-                        </div>
-                    );
-                })}
-            </div>
-        ))}
-    </div>
-);
-
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, stores, selectedStoreId, showToast, masterStockList }) => {
-    const generateOrderOutput = () => {
-      let output = `${stores[selectedStoreId] || 'Selected Store'}\n\n`;
-      Object.keys(masterStockList).forEach(category => {
-          output += `*${category.toUpperCase()}*\n`;
-          masterStockList[category].forEach(item => {
-              const key = `${category}-${item}`;
-              const qty = orderQuantities[key] || 0;
-              if (qty > 0) {
-                  output += `${item} - ${qty}\n`;
-              }
-          });
-          output += '\n';
-      });
-      return output;
-    };
-
-    const handleCopy = async () => {
-        const output = generateOrderOutput();
-        try {
-            await navigator.clipboard.writeText(output);
-            showToast('Order copied to clipboard!', 'success');
-        } catch (err) {
-            // Fallback for older browsers or insecure contexts
-            const textArea = document.createElement("textarea");
-            textArea.value = output;
-            textArea.style.position = "fixed";
-            textArea.style.top = "-9999px";
-            textArea.style.left = "-9999px";
-            document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-              document.execCommand('copy');
-              showToast('Order copied to clipboard!', 'success');
-            } catch (copyErr) {
-              showToast('Failed to copy. Please copy manually.', 'error');
-            } finally {
-               document.body.removeChild(textArea);
-            }
-        }
-    };
-
-    return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display">Order Management</h2>
-            {Object.keys(masterStockList).map(category => (
-                <div key={category} className="bg-white p-4 rounded-xl shadow-lg">
-                    <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{category}</h3>
-                    {masterStockList[category].map(item => {
-                        const key = `${category}-${item}`;
-                        return (
-                            <div key={key} className="flex items-center justify-between p-3">
-                                <div>
-                                    <p className="font-semibold">{item}</p>
-                                    <p className="text-xs text-gray-500">Current: {currentStock[key] || 0}</p>
-                                </div>
-                                <input type="number" min="0" value={orderQuantities[key] || ''} onChange={e => setOrderQuantities(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))} className="w-1/3 p-2 text-right border rounded" />
-                            </div>
-                        );
-                    })}
-                </div>
-            ))}
-            <button onClick={handleCopy} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl">Generate & Copy Order</button>
-        </div>
-    );
-};
-
-const AdminUserManagementView = ({ db, appId, stores, auth, showToast }) => {
-    const [username, setUsername] = useState('');
-    const [password, setPassword] = useState('');
-    const [role, setRole] = useState(USER_ROLES.STAFF);
-    const [storeId, setStoreId] = useState(Object.keys(stores)[0] || '');
-    const [loading, setLoading] = useState(false);
-
-    const handleCreate = async e => {
-        e.preventDefault();
-        setLoading(true);
-        const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
-        try {
-            const userCredential = await createUserWithEmailAndPassword(auth, email, password);
-            const profileRef = doc(db, `artifacts/${appId}/users/${userCredential.user.uid}/user_config/profile`);
-            await setDoc(profileRef, { role, storeId, username: username.trim() });
-            showToast('User created successfully!', 'success');
-            setUsername(''); setPassword('');
-        } catch (error) {
-            showToast(error.message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    return (
-        <form onSubmit={handleCreate} className="p-4 space-y-4">
-            <h2 className="text-2xl font-bold font-display">User Manager</h2>
-            <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} />
-            <InputField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
-            <SelectField label="Role" value={role} onChange={e => setRole(e.target.value)}>
-                <option value={USER_ROLES.STAFF}>Staff</option>
-                <option value={USER_ROLES.ADMIN}>Admin</option>
-            </SelectField>
-            <SelectField label="Store" value={storeId} onChange={e => setStoreId(e.target.value)}>
-                {Object.entries(stores).map(([id, name]) => <option key={id} value={id}>{name}</option>)}
-            </SelectField>
-            <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl">{loading ? 'Creating...' : 'Create User'}</button>
-        </form>
-    );
-};
-
-const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
-    const [name, setName] = useState('');
-    const [loading, setLoading] = useState(false);
-
-    const handleAdd = async e => {
-        e.preventDefault();
-        setLoading(true);
-        try {
-            await addDoc(collection(db, `artifacts/${appId}/public/data/stores`), { name: name.trim(), createdAt: new Date().toISOString() });
-            showToast('Store added!', 'success');
-            setName('');
-        } catch (error) {
-            showToast(error.message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleDelete = async (id, storeName) => {
-        const confirmed = await showConfirm({ title: 'Delete Store', message: `Delete "${storeName}"?`, confirmColor: 'red' });
-        if (confirmed) {
-            try {
-                await deleteDoc(doc(db, `artifacts/${appId}/public/data/stores`, id));
-                showToast('Store deleted.', 'success');
-            } catch (error) {
-                showToast(error.message, 'error');
-            }
-        }
-    };
-
-    return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display">Store Manager</h2>
-            <form onSubmit={handleAdd} className="space-y-4">
-                <InputField label="New Store Name" value={name} onChange={e => setName(e.target.value)} />
-                <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Store'}</button>
-            </form>
-            <div>
-                <h3 className="text-lg font-bold mt-6 mb-2">Current Stores</h3>
-                {Object.entries(stores).map(([id, storeName]) => (
-                    <div key={id} className="flex justify-between items-center p-3 bg-white rounded-lg shadow mb-2">
-                        <span>{storeName}</span>
-                        <button onClick={() => handleDelete(id, storeName)} className="text-red-500"><Trash2 /></button>
-                    </div>
-                ))}
-            </div>
-        </div>
-    );
-};
-
-const StockItemManagementView = ({ db, appId, masterStockList, showToast, showConfirm }) => {
-    const [itemName, setItemName] = useState('');
-    const [category, setCategory] = useState('MILKSHAKE');
-    const [loading, setLoading] = useState(false);
-    
-    const stockListRef = doc(db, `artifacts/${appId}/public/config/settings/masterStockList`);
-
-    const handleSave = async (newList) => {
-        setLoading(true);
-        try {
-            await setDoc(stockListRef, { list: newList });
-            showToast('Item list updated!', 'success');
-        } catch (error) {
-            showToast(error.message, 'error');
-        } finally {
-            setLoading(false);
-        }
-    };
-
-    const handleAdd = async e => {
-        e.preventDefault();
-        const newList = { ...masterStockList };
-        newList[category] = [...(newList[category] || []), itemName.trim()];
-        await handleSave(newList);
-        setItemName('');
-    };
-
-    const handleDelete = async (cat, item) => {
-        const confirmed = await showConfirm({ title: 'Delete Item', message: `Delete "${item}"?`, confirmColor: 'red' });
-        if (confirmed) {
-            const newList = { ...masterStockList };
-            newList[cat] = newList[cat].filter(i => i !== item);
-            await handleSave(newList);
-        }
-    };
-
-    return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display">Stock Item Manager</h2>
-            <form onSubmit={handleAdd} className="space-y-4">
-                <SelectField label="Category" value={category} onChange={e => setCategory(e.target.value)}>
-                    {Object.keys(masterStockList).map(cat => <option key={cat} value={cat}>{cat}</option>)}
-                </SelectField>
-                <InputField label="New Item Name" value={itemName} onChange={e => setItemName(e.target.value)} />
-                <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Item'}</button>
-            </form>
-             {Object.keys(masterStockList).map(cat => (
-                <div key={cat} className="bg-white p-4 rounded-xl shadow-lg mt-4">
-                    <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{cat}</h3>
-                    {masterStockList[cat].map(item => (
-                        <div key={item} className="flex justify-between items-center p-2">
-                            <span>{item}</span>
-                            <button onClick={() => handleDelete(cat, item)} className="text-red-500"><Trash2 size={18} /></button>
-                        </div>
-                    ))}
-                </div>
-            ))}
-        </div>
-    );
-};
-
-const NavBar = ({ currentView, setView, role, onHomeClick }) => {
-    const NavButton = ({ icon, label, view, ...props }) => (
-        <button {...props} onClick={() => setView(view)} className={`flex flex-col items-center p-1 w-1/5 ${currentView === view ? 'text-orange-600' : 'text-gray-500'}`}>
-            {React.createElement(icon, { className: "w-6 h-6" })}
-            <span className="text-xs">{label}</span>
-        </button>
-    );
-    return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] flex justify-around h-16 max-w-lg mx-auto">
-            <button onClick={onHomeClick} className={`flex flex-col items-center p-1 w-1/5 ${currentView === VIEWS.HOME ? 'text-orange-600' : 'text-gray-500'}`}>
-                <Home className="w-6 h-6" />
-                <span className="text-xs">Home</span>
-            </button>
-            {role === USER_ROLES.ADMIN && <NavButton icon={ShieldCheck} label="Admin" view={VIEWS.ADMIN_FUNCTIONS} />}
-            {/* Add more nav buttons as needed */}
-        </nav>
     );
 };
 
