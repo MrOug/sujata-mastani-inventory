@@ -1,5 +1,5 @@
 // Service Worker for PWA
-const CACHE_NAME = 'sujata-mastani-v2'; // Incremented cache version
+const CACHE_NAME = 'sujata-mastani-v3'; // Incremented cache version
 const urlsToCache = [
   '/',
   '/index.html',
@@ -32,42 +32,34 @@ self.addEventListener('activate', (event) => {
   self.clients.claim();
 });
 
-// Fetch event - serve from cache, fallback to network
+// Fetch event - handle requests
 self.addEventListener('fetch', (event) => {
   const requestUrl = new URL(event.request.url);
 
-  // *** FIX ***
-  // Do not cache Firestore requests. Let them pass through to the network.
-  // This prevents the NS_BINDING_ABORTED error.
-  if (requestUrl.hostname === 'firestore.googleapis.com') {
-    return; // Let the browser handle the request
+  // *** ROBUST FIX ***
+  // Strategy 1: Ignore all Google API calls to prevent any interference.
+  if (requestUrl.hostname.endsWith('googleapis.com')) {
+    // Let the browser handle these requests normally by not calling event.respondWith.
+    return;
   }
 
-  // For other requests, use a cache-first strategy.
+  // Strategy 2: Network falling back to cache for all other requests (app assets).
+  // This ensures the user gets the latest version if online, but the app still works offline.
   event.respondWith(
-    caches.match(event.request)
-      .then((response) => {
-        // Cache hit - return response
-        if (response) {
-          return response;
-        }
-
-        // Not in cache - fetch from network and cache it
-        return fetch(event.request).then((networkResponse) => {
-          // Check if we received a valid response
-          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
-            return networkResponse;
-          }
-
-          // Clone the response
-          const responseToCache = networkResponse.clone();
-          caches.open(CACHE_NAME)
-            .then((cache) => {
-              cache.put(event.request, responseToCache);
-            });
-
-          return networkResponse;
-        });
+    fetch(event.request)
+      .then((networkResponse) => {
+        // If the fetch is successful, cache the new response and then return it.
+        const responseToCache = networkResponse.clone();
+        caches.open(CACHE_NAME)
+          .then((cache) => {
+            cache.put(event.request, responseToCache);
+          });
+        return networkResponse;
+      })
+      .catch(() => {
+        // If the network request fails (e.g., user is offline),
+        // try to serve the response from the cache.
+        return caches.match(event.request);
       })
   );
 });
