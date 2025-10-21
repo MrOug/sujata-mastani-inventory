@@ -12,9 +12,8 @@ ReactDOM.createRoot(document.getElementById('root')).render(
   </React.StrictMode>,
 )
 
-// Service Worker disabled - causing Firebase connection issues
-// Uncomment this when Service Worker is properly configured
-/*
+// *** FIX RE-ENABLED ***
+// Service Worker is now safe to use with the updated sw.js file.
 if ('serviceWorker' in navigator) {
   window.addEventListener('load', () => {
     navigator.serviceWorker.register('/sw.js')
@@ -26,5 +25,4 @@ if ('serviceWorker' in navigator) {
       });
   });
 }
-*/
 
