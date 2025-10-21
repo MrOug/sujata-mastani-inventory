@@ -2,7 +2,6 @@ import React, { useState, useEffect, useCallback, useMemo } from 'react';
 import { initializeApp } from 'firebase/app';
 import { 
     getAuth, 
-    signInAnonymously, 
     onAuthStateChanged, 
     createUserWithEmailAndPassword, 
     signInWithEmailAndPassword, 
@@ -13,16 +12,17 @@ import {
     doc, 
     setDoc, 
     getDoc, 
-    updateDoc, 
     collection, 
     addDoc, 
     onSnapshot, 
     deleteDoc,
-    writeBatch
+    writeBatch,
+    query,
+    getDocs
 } from 'firebase/firestore';
-import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus, X, Store, Trash2, ShieldCheck, AlertTriangle } from 'lucide-react'; 
+import { User, Home, List, ShoppingCart, Loader, LogOut, X, Store, Trash2, ShieldCheck, TrendingDown, Users, Package, ArrowLeft, Settings } from 'lucide-react'; 
 
-// --- Constants (from constants.js) ---
+// --- Constants (from project files) ---
 const INITIAL_STOCK_LIST = {
   MILKSHAKE: [
     'Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch',
@@ -44,9 +44,9 @@ const INITIAL_STOCK_LIST = {
 const USER_ROLES = { ADMIN: 'admin', STAFF: 'staff' };
 const VIEWS = { HOME: 'home', ENTRY: 'entry', SOLD: 'sold', ORDER: 'order', ADMIN_FUNCTIONS: 'admin_functions', STORE_MANAGER: 'storemanager', USER_MANAGER: 'usermanager', ITEM_MANAGER: 'itemmanager' };
 
-// --- Firebase Setup ---
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {};
+// --- App ID (using placeholder) ---
 const appId = (typeof __app_id !== 'undefined' ? __app_id : 'default-app-id').replace(/\//g, '_');
+
 
 // --- Utility Functions ---
 const getEmptyStock = (stockList) => {
@@ -59,8 +59,8 @@ const getEmptyStock = (stockList) => {
   return stock;
 };
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
-const getYesterdayDate = () => {
-    const d = new Date();
+const getYesterdayDate = (dateStr) => {
+    const d = new Date(dateStr);
     d.setDate(d.getDate() - 1);
     return d.toISOString().slice(0, 10);
 };
@@ -75,7 +75,7 @@ const LoadingSpinner = ({ message = 'Loading...' }) => (
 );
 
 const Modal = ({ title, children, onClose }) => (
-  <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 p-4 backdrop-blur-sm">
+  <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 p-4 backdrop-blur-sm animate-fadeIn">
     <div className="bg-white w-full max-w-md rounded-xl shadow-2xl p-6 relative border border-orange-100">
       <h3 className="text-2xl font-bold font-display text-orange-700 border-b border-gray-200 pb-3 mb-4">
         {title}
@@ -92,6 +92,47 @@ const Modal = ({ title, children, onClose }) => (
     </div>
   </div>
 );
+
+const FirebaseConfigModal = ({ onConfigSaved }) => {
+    const [configJson, setConfigJson] = useState('');
+    const [error, setError] = useState('');
+
+    const handleSave = () => {
+        try {
+            const config = JSON.parse(configJson);
+            if (!config.apiKey || !config.projectId) {
+                setError('Invalid Firebase config. Missing apiKey or projectId.');
+                return;
+            }
+            localStorage.setItem('firebaseConfig', JSON.stringify(config));
+            onConfigSaved(config);
+        } catch (e) {
+            setError('Invalid JSON. Please paste the config object from Firebase.');
+        }
+    };
+
+    return (
+        <Modal title="Firebase Setup Required">
+            <p className="text-gray-600 mb-4">
+                Please paste your Firebase configuration object below. You can find this in your Firebase project settings.
+            </p>
+            <textarea
+                value={configJson}
+                onChange={(e) => setConfigJson(e.target.value)}
+                placeholder='{"apiKey": "...", "authDomain": "...", ...}'
+                className="w-full h-40 p-2 border rounded-md font-mono text-sm"
+            />
+            {error && <p className="text-red-500 text-sm mt-2">{error}</p>}
+            <button
+                onClick={handleSave}
+                className="w-full mt-4 py-3 bg-orange-600 text-white font-bold rounded-xl hover:bg-orange-700 transition-colors"
+            >
+                Save and Initialize
+            </button>
+        </Modal>
+    );
+};
+
 
 const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = 'Confirm', cancelText = 'Cancel', confirmColor = 'orange' }) => {
   const colorClasses = {
@@ -156,12 +197,12 @@ const StockInput = ({ label, value, onChange }) => (
     </div>
 );
 
-const InputField = ({ label, type = 'text', value, onChange, placeholder, minLength }) => (
+const InputField = ({ label, type = 'text', value, onChange, placeholder, minLength, required=true }) => (
     <label className="flex flex-col min-w-40 flex-1">
         <p className="text-sm font-semibold text-orange-700/80 leading-normal pb-2">{label}</p>
         <input 
             className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 placeholder:text-gray-400 p-3 text-base font-normal leading-normal text-gray-900 transition-all duration-300"
-            type={type} value={value} onChange={onChange} placeholder={placeholder} minLength={minLength} required
+            type={type} value={value} onChange={onChange} placeholder={placeholder} minLength={minLength} required={required}
         />
     </label>
 );
@@ -178,24 +219,22 @@ const SelectField = ({ label, value, onChange, children }) => (
     </label>
 );
 
-// --- Sub-Views and Components ---
-
 const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
     const [isRegister, setIsRegister] = useState(isFirstUser);
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [error, setError] = useState('');
     const [loading, setLoading] = useState(false);
+    const title = isFirstUser ? "Create Super Admin" : (isRegister ? "Register User" : "User Login");
 
     const handleSubmit = async (e) => {
         e.preventDefault();
         setError('');
-        setLoading(true);
         if (password.length < 6) {
             setError("Password must be at least 6 characters.");
-            setLoading(false);
             return;
         }
+        setLoading(true);
         const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
         try {
             const userCredential = isRegister
@@ -203,21 +242,23 @@ const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
                 : await signInWithEmailAndPassword(auth, email, password);
             onLoginSuccess(userCredential.user, username.trim());
         } catch (err) {
-            setError(err.message.replace('Firebase: Error (auth/', '').replace(').', ''));
+            const friendlyError = err.code ? err.code.replace('auth/', '').replace(/-/g, ' ') : "An unknown error occurred";
+            setError(friendlyError.charAt(0).toUpperCase() + friendlyError.slice(1));
         } finally {
             setLoading(false);
         }
     };
 
     return (
-        <Modal title={isRegister ? "Admin Registration" : "Login"} onClose={onClose}>
+        <Modal title={title} onClose={onClose}>
+            {isFirstUser && <p className="mb-4 text-sm text-yellow-700 bg-yellow-100 p-3 rounded-md">No admin account found. The first registered user will become the super admin.</p>}
             <form onSubmit={handleSubmit} className="space-y-4">
                 <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} placeholder="e.g., staff.kothrud" />
-                <InputField label="Password (Min 6 chars)" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="******" minLength="6" />
-                {error && <p className="text-red-500 text-sm">{error}</p>}
-                <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{loading ? 'Processing...' : (isRegister ? 'Register' : 'Log In')}</button>
+                <InputField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="min. 6 characters" minLength="6" />
+                {error && <p className="text-red-500 text-sm text-center">{error}</p>}
+                <button type="submit" disabled={loading} className="w-full py-3 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50 transition-colors hover:bg-orange-700">{loading ? 'Processing...' : (isRegister ? 'Register' : 'Log In')}</button>
             </form>
-            {!isFirstUser && <button onClick={() => setIsRegister(p => !p)} className="w-full mt-4 text-sm text-orange-600">{isRegister ? "Already have an account? Log In" : "Need to register? Sign Up"}</button>}
+            {!isFirstUser && <button onClick={() => setIsRegister(p => !p)} className="w-full mt-4 text-sm text-center text-orange-600 hover:underline">{isRegister ? "Already have an account? Log In" : "Need to register? Sign Up"}</button>}
         </Modal>
     );
 };
@@ -234,8 +275,8 @@ const StockEntryView = ({ storeName, stockData, setStockData, saveStock, isSavin
                 ))}
             </div>
         ))}
-        <button onClick={saveStock} disabled={isSaving} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50">{isSaving ? 'Saving...' : 'Save Stock'}</button>
-        {hasSaveError && <button onClick={saveStock} className="w-full mt-2 py-2 bg-red-600 text-white font-bold rounded-lg">Retry Save</button>}
+        <button onClick={saveStock} disabled={isSaving} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl disabled:opacity-50 shadow-lg hover:bg-orange-700 transition">{isSaving ? 'Saving...' : 'Save Closing Stock'}</button>
+        {hasSaveError && <button onClick={saveStock} className="w-full mt-2 py-2 bg-red-600 text-white font-bold rounded-lg hover:bg-red-700">Retry Save</button>}
     </div>
 );
 
@@ -253,10 +294,10 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
                     const key = `${category}-${item}`;
                     const sold = calculateSold(key);
                     return (
-                        <div key={key} className={`flex justify-between items-center p-3 rounded-lg ${sold < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
+                        <div key={key} className={`flex justify-between items-center p-3 rounded-lg mb-1 ${sold < 0 ? 'bg-red-50' : 'bg-gray-50'}`}>
                             <div>
                                 <p className="font-semibold">{item}</p>
-                                <p className="text-xs text-gray-500">Yst: {yesterdayStock[key] || 0} | Cur: {currentStock[key] || 0}</p>
+                                <p className="text-xs text-gray-500">Yesterday: {yesterdayStock[key] || 0} | Current: {currentStock[key] || 0}</p>
                             </div>
                             <p className={`text-2xl font-bold ${sold < 0 ? 'text-red-700' : 'text-orange-600'}`}>{sold}</p>
                         </div>
@@ -269,17 +310,21 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
 
 const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, stores, selectedStoreId, showToast, masterStockList }) => {
     const generateOrderOutput = () => {
-      let output = `${stores[selectedStoreId] || 'Selected Store'}\n\n`;
+      let output = `*ORDER - ${stores[selectedStoreId] || 'Selected Store'}*\n\n`;
       Object.keys(masterStockList).forEach(category => {
-          output += `*${category.toUpperCase()}*\n`;
-          masterStockList[category].forEach(item => {
-              const key = `${category}-${item}`;
-              const qty = orderQuantities[key] || 0;
-              if (qty > 0) {
-                  output += `${item} - ${qty}\n`;
-              }
-          });
-          output += '\n';
+          const categoryItems = masterStockList[category]
+              .map(item => {
+                  const key = `${category}-${item}`;
+                  const qty = orderQuantities[key] || 0;
+                  return qty > 0 ? `${item} - ${qty}` : null;
+              })
+              .filter(Boolean);
+
+          if (categoryItems.length > 0) {
+              output += `*${category.toUpperCase()}*\n`;
+              output += categoryItems.join('\n');
+              output += '\n\n';
+          }
       });
       return output;
     };
@@ -290,23 +335,14 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, store
             await navigator.clipboard.writeText(output);
             showToast('Order copied to clipboard!', 'success');
         } catch (err) {
-            // Fallback for older browsers or insecure contexts
             const textArea = document.createElement("textarea");
             textArea.value = output;
-            textArea.style.position = "fixed";
-            textArea.style.top = "-9999px";
-            textArea.style.left = "-9999px";
+            textArea.style.position = "fixed"; textArea.style.top = "-9999px";
             document.body.appendChild(textArea);
-            textArea.focus();
-            textArea.select();
-            try {
-              document.execCommand('copy');
-              showToast('Order copied to clipboard!', 'success');
-            } catch (copyErr) {
-              showToast('Failed to copy. Please copy manually.', 'error');
-            } finally {
-               document.body.removeChild(textArea);
-            }
+            textArea.focus(); textArea.select();
+            try { document.execCommand('copy'); showToast('Order copied as fallback!', 'success'); } 
+            catch (copyErr) { showToast('Failed to copy. Please copy manually.', 'error'); console.error(output); } 
+            finally { document.body.removeChild(textArea); }
         }
     };
 
@@ -319,18 +355,18 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, store
                     {masterStockList[category].map(item => {
                         const key = `${category}-${item}`;
                         return (
-                            <div key={key} className="flex items-center justify-between p-3">
+                            <div key={key} className="flex items-center justify-between p-3 border-b last:border-b-0">
                                 <div>
                                     <p className="font-semibold">{item}</p>
-                                    <p className="text-xs text-gray-500">Current: {currentStock[key] || 0}</p>
+                                    <p className="text-xs text-gray-500">Current Stock: {currentStock[key] || 0}</p>
                                 </div>
-                                <input type="number" min="0" value={orderQuantities[key] || ''} onChange={e => setOrderQuantities(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))} className="w-1/3 p-2 text-right border rounded" />
+                                <input type="number" min="0" placeholder="Qty" value={orderQuantities[key] || ''} onChange={e => setOrderQuantities(p => ({ ...p, [key]: parseFloat(e.target.value) || 0 }))} className="w-1/4 p-2 text-right border rounded" />
                             </div>
                         );
                     })}
                 </div>
             ))}
-            <button onClick={handleCopy} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl">Generate & Copy Order</button>
+            <button onClick={handleCopy} className="w-full py-4 bg-orange-600 text-white font-bold rounded-xl shadow-lg hover:bg-orange-700">Generate & Copy Order</button>
         </div>
     );
 };
@@ -344,9 +380,15 @@ const AdminUserManagementView = ({ db, appId, stores, auth, showToast }) => {
 
     const handleCreate = async e => {
         e.preventDefault();
+        if (password.length < 6) {
+            showToast('Password must be at least 6 characters.', 'error');
+            return;
+        }
         setLoading(true);
         const email = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
         try {
+            // Note: In a production app, you'd handle user creation on a backend for security.
+            // Here, we rely on Firestore rules restricting who can create users (implicitly, only admins who can see this view).
             const userCredential = await createUserWithEmailAndPassword(auth, email, password);
             const profileRef = doc(db, `artifacts/${appId}/users/${userCredential.user.uid}/user_config/profile`);
             await setDoc(profileRef, { role, storeId, username: username.trim() });
@@ -363,7 +405,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, showToast }) => {
         <form onSubmit={handleCreate} className="p-4 space-y-4">
             <h2 className="text-2xl font-bold font-display">User Manager</h2>
             <InputField label="Username" value={username} onChange={e => setUsername(e.target.value)} />
-            <InputField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} />
+            <InputField label="Password" type="password" value={password} onChange={e => setPassword(e.target.value)} placeholder="min. 6 characters" />
             <SelectField label="Role" value={role} onChange={e => setRole(e.target.value)}>
                 <option value={USER_ROLES.STAFF}>Staff</option>
                 <option value={USER_ROLES.ADMIN}>Admin</option>
@@ -382,6 +424,10 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 
     const handleAdd = async e => {
         e.preventDefault();
+        if (!name.trim()) {
+            showToast('Store name cannot be empty.', 'error');
+            return;
+        }
         setLoading(true);
         try {
             await addDoc(collection(db, `artifacts/${appId}/public/data/stores`), { name: name.trim(), createdAt: new Date().toISOString() });
@@ -395,7 +441,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     };
 
     const handleDelete = async (id, storeName) => {
-        const confirmed = await showConfirm({ title: 'Delete Store', message: `Delete "${storeName}"?`, confirmColor: 'red' });
+        const confirmed = await showConfirm({ title: 'Delete Store', message: `Are you sure you want to delete "${storeName}"? This action cannot be undone.`, confirmColor: 'red' });
         if (confirmed) {
             try {
                 await deleteDoc(doc(db, `artifacts/${appId}/public/data/stores`, id));
@@ -409,7 +455,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display">Store Manager</h2>
-            <form onSubmit={handleAdd} className="space-y-4">
+            <form onSubmit={handleAdd} className="space-y-4 bg-white p-4 rounded-xl shadow-lg">
                 <InputField label="New Store Name" value={name} onChange={e => setName(e.target.value)} />
                 <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Store'}</button>
             </form>
@@ -418,7 +464,7 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
                 {Object.entries(stores).map(([id, storeName]) => (
                     <div key={id} className="flex justify-between items-center p-3 bg-white rounded-lg shadow mb-2">
                         <span>{storeName}</span>
-                        <button onClick={() => handleDelete(id, storeName)} className="text-red-500"><Trash2 /></button>
+                        <button onClick={() => handleDelete(id, storeName)} className="text-red-500 hover:text-red-700 p-2 rounded-full hover:bg-red-100"><Trash2 /></button>
                     </div>
                 ))}
             </div>
@@ -431,7 +477,7 @@ const StockItemManagementView = ({ db, appId, masterStockList, showToast, showCo
     const [category, setCategory] = useState('MILKSHAKE');
     const [loading, setLoading] = useState(false);
     
-    const stockListRef = doc(db, `artifacts/${appId}/public/config/settings/masterStockList`);
+    const stockListRef = doc(db, `artifacts/${appId}/public/config/settings`, "masterStockList");
 
     const handleSave = async (newList) => {
         setLoading(true);
@@ -447,16 +493,20 @@ const StockItemManagementView = ({ db, appId, masterStockList, showToast, showCo
 
     const handleAdd = async e => {
         e.preventDefault();
-        const newList = { ...masterStockList };
+        if (!itemName.trim()) {
+            showToast('Item name cannot be empty.', 'error');
+            return;
+        }
+        const newList = JSON.parse(JSON.stringify(masterStockList)); // Deep copy
         newList[category] = [...(newList[category] || []), itemName.trim()];
         await handleSave(newList);
         setItemName('');
     };
 
     const handleDelete = async (cat, item) => {
-        const confirmed = await showConfirm({ title: 'Delete Item', message: `Delete "${item}"?`, confirmColor: 'red' });
+        const confirmed = await showConfirm({ title: 'Delete Item', message: `Are you sure you want to delete "${item}" from ${cat}?`, confirmColor: 'red' });
         if (confirmed) {
-            const newList = { ...masterStockList };
+            const newList = JSON.parse(JSON.stringify(masterStockList)); // Deep copy
             newList[cat] = newList[cat].filter(i => i !== item);
             await handleSave(newList);
         }
@@ -465,9 +515,9 @@ const StockItemManagementView = ({ db, appId, masterStockList, showToast, showCo
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display">Stock Item Manager</h2>
-            <form onSubmit={handleAdd} className="space-y-4">
+            <form onSubmit={handleAdd} className="space-y-4 bg-white p-4 rounded-xl shadow-lg">
                 <SelectField label="Category" value={category} onChange={e => setCategory(e.target.value)}>
-                    {Object.keys(masterStockList).map(cat => <option key={cat} value={cat}>{cat}</option>)}
+                    {Object.keys(INITIAL_STOCK_LIST).map(cat => <option key={cat} value={cat}>{cat}</option>)}
                 </SelectField>
                 <InputField label="New Item Name" value={itemName} onChange={e => setItemName(e.target.value)} />
                 <button type="submit" disabled={loading} className="w-full py-3 bg-green-600 text-white font-bold rounded-xl">{loading ? 'Adding...' : 'Add Item'}</button>
@@ -476,9 +526,9 @@ const StockItemManagementView = ({ db, appId, masterStockList, showToast, showCo
                 <div key={cat} className="bg-white p-4 rounded-xl shadow-lg mt-4">
                     <h3 className="text-lg font-bold text-orange-700 border-b pb-2 mb-3">{cat}</h3>
                     {masterStockList[cat].map(item => (
-                        <div key={item} className="flex justify-between items-center p-2">
+                        <div key={item} className="flex justify-between items-center p-2 border-b last:border-0">
                             <span>{item}</span>
-                            <button onClick={() => handleDelete(cat, item)} className="text-red-500"><Trash2 size={18} /></button>
+                            <button onClick={() => handleDelete(cat, item)} className="text-red-500 hover:text-red-700 p-1 rounded-full hover:bg-red-100"><Trash2 size={18} /></button>
                         </div>
                     ))}
                 </div>
@@ -487,43 +537,42 @@ const StockItemManagementView = ({ db, appId, masterStockList, showToast, showCo
     );
 };
 
-const NavBar = ({ currentView, setView, role, onHomeClick }) => {
-    const NavButton = ({ icon, label, view, ...props }) => (
-        <button {...props} onClick={() => setView(view)} className={`flex flex-col items-center p-1 w-1/5 ${currentView === view ? 'text-orange-600' : 'text-gray-500'}`}>
-            {React.createElement(icon, { className: "w-6 h-6" })}
-            <span className="text-xs">{label}</span>
+const NavBar = ({ currentView, setView, role }) => {
+    const NavButton = ({ icon, label, targetView }) => (
+        <button onClick={() => setView(targetView)} className={`flex flex-col items-center justify-center p-1 w-1/4 h-full ${currentView === targetView ? 'text-orange-600' : 'text-gray-500 hover:text-orange-500'}`}>
+            {React.createElement(icon, { className: "w-6 h-6 mb-1" })}
+            <span className="text-xs font-medium">{label}</span>
         </button>
     );
+
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] flex justify-around h-16 max-w-lg mx-auto">
-            <button onClick={onHomeClick} className={`flex flex-col items-center p-1 w-1/5 ${currentView === VIEWS.HOME ? 'text-orange-600' : 'text-gray-500'}`}>
-                <Home className="w-6 h-6" />
-                <span className="text-xs">Home</span>
-            </button>
-            {role === USER_ROLES.ADMIN && <NavButton icon={ShieldCheck} label="Admin" view={VIEWS.ADMIN_FUNCTIONS} />}
-            {/* Add more nav buttons as needed */}
+        <nav className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.08)] flex justify-around h-20 max-w-lg mx-auto rounded-t-2xl border-t">
+            <NavButton icon={Home} label="Home" targetView={VIEWS.HOME} />
+            <NavButton icon={List} label="Entry" targetView={VIEWS.ENTRY} />
+            <NavButton icon={TrendingDown} label="Sold" targetView={VIEWS.SOLD} />
+            <NavButton icon={ShoppingCart} label="Order" targetView={VIEWS.ORDER} />
         </nav>
     );
 };
 
-// --- Main App Logic ---
-const App = () => {
-    // Core State
+// --- Main App Component ---
+function App() {
+    const [firebaseConfig, setFirebaseConfig] = useState(null);
+    const [isConfigNeeded, setIsConfigNeeded] = useState(false);
+    
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
     const [user, setUser] = useState(null);
     const [userProfile, setUserProfile] = useState({ role: null, storeId: null });
-    const [appStatus, setAppStatus] = useState('initializing'); // initializing, authenticating, loading, ready, error
+    const [appStatus, setAppStatus] = useState('initializing');
     const [appError, setAppError] = useState(null);
 
-    // Data State
     const [stores, setStores] = useState({});
     const [masterStockList, setMasterStockList] = useState(INITIAL_STOCK_LIST);
     const [currentStock, setCurrentStock] = useState({});
     const [yesterdayStock, setYesterdayStock] = useState({});
     const [orderQuantities, setOrderQuantities] = useState({});
-
-    // UI State
+    
     const [view, setView] = useState(VIEWS.HOME);
     const [selectedStoreId, setSelectedStoreId] = useState('');
     const [selectedDate, setSelectedDate] = useState(getTodayDate());
@@ -534,312 +583,244 @@ const App = () => {
     const [toasts, setToasts] = useState([]);
     const [confirmDialog, setConfirmDialog] = useState(null);
 
-    // Derived State
     const { role, storeId: assignedStoreId } = userProfile;
 
-    // --- Toast & Confirmation Callbacks ---
-    const showToast = useCallback((message, type = 'success') => {
-        setToasts(prev => [...prev, { id: Date.now(), message, type }]);
-    }, []);
+    const showToast = useCallback((message, type = 'success') => setToasts(prev => [...prev, { id: Date.now(), message, type }]), []);
     const removeToast = useCallback(id => setToasts(prev => prev.filter(t => t.id !== id)), []);
-    const showConfirm = useCallback(options => {
-        return new Promise(resolve => {
-            setConfirmDialog({
-                ...options,
-                onConfirm: () => { setConfirmDialog(null); resolve(true); },
-                onCancel: () => { setConfirmDialog(null); resolve(false); }
-            });
-        });
+    const showConfirm = useCallback(options => new Promise(resolve => setConfirmDialog({ ...options, onConfirm: () => { setConfirmDialog(null); resolve(true); }, onCancel: () => { setConfirmDialog(null); resolve(false); } })), []);
+    const handleError = (error, context = 'Unknown') => { console.error(`Error in ${context}:`, error); setAppError({ message: error.message, context }); setAppStatus('error'); };
+
+    useEffect(() => {
+        // 1. Try to get config from global variable
+        let config = null;
+        try {
+            if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
+                config = JSON.parse(__firebase_config);
+            }
+        } catch (e) { /* ignore parse error */ }
+
+        // 2. If not found, try localStorage
+        if (!config || !config.apiKey) {
+            try {
+                const storedConfig = localStorage.getItem('firebaseConfig');
+                if (storedConfig) {
+                    config = JSON.parse(storedConfig);
+                }
+            } catch (e) { /* ignore parse error */ }
+        }
+
+        // 3. If a valid config is found, set it. Otherwise, prompt the user.
+        if (config && config.apiKey) {
+            setFirebaseConfig(config);
+        } else {
+            setIsConfigNeeded(true);
+        }
     }, []);
 
-    // --- Error Handling ---
-    const handleError = (error, context = 'Unknown') => {
-        console.error(`Error in ${context}:`, error);
-        setAppError({ message: error.message || 'An unexpected error occurred.', context });
-        setAppStatus('error');
-    };
-
-    // --- Firebase Initialization and Auth ---
     useEffect(() => {
+        if (!firebaseConfig) return;
+
         try {
             const app = initializeApp(firebaseConfig);
-            const firestore = getFirestore(app);
-            const authentication = getAuth(app);
-            setDb(firestore);
-            setAuth(authentication);
-
-            const unsubscribe = onAuthStateChanged(authentication, async (authUser) => {
-                if (authUser) {
-                    setUser(authUser);
-                } else {
-                    setUser(null);
-                    setUserProfile({ role: null, storeId: null });
-                    try {
-                        const setupDocRef = doc(firestore, `artifacts/${appId}/public/config/settings/setup`);
-                        const setupDocSnap = await getDoc(setupDocRef);
-                        setIsFirstUser(!setupDocSnap.exists());
-                    } catch (error) {
-                        console.warn("Could not check for first user setup (likely due to permissions for anonymous users, this is normal):", error.message);
-                        setIsFirstUser(false);
-                    }
-                    setAppStatus('authenticating');
-                    setShowAuthModal(true);
-                }
-            });
-            return () => unsubscribe();
+            setDb(getFirestore(app));
+            setAuth(getAuth(app));
+            setIsConfigNeeded(false); // Hide modal if it was open
         } catch (error) {
             handleError(error, 'Firebase Initialization');
         }
-    }, []);
+    }, [firebaseConfig]);
+    
+    useEffect(() => {
+        if (!auth || !db) return;
+        const checkFirstUser = async () => {
+             try {
+                const usersCollectionRef = collection(db, `artifacts/${appId}/users`);
+                const q = query(usersCollectionRef);
+                const querySnapshot = await getDocs(q);
+                setIsFirstUser(querySnapshot.empty);
+            } catch (error) {
+                console.warn("Could not check for first user:", error.message);
+                setIsFirstUser(false);
+            }
+        };
 
-    // --- User Profile, Stores, and Master Stock List Fetching ---
+        const unsubscribe = onAuthStateChanged(auth, async (authUser) => {
+            if (authUser) {
+                setUser(authUser);
+                setShowAuthModal(false);
+            } else {
+                setUser(null);
+                setUserProfile({ role: null, storeId: null });
+                await checkFirstUser();
+                setAppStatus('authenticating');
+                setShowAuthModal(true);
+            }
+        });
+        return () => unsubscribe();
+    }, [auth, db]);
+
     useEffect(() => {
         if (!db || !user) return;
-
+        setAppStatus('loading');
         const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_config/profile`);
+        const unsubProfile = onSnapshot(profileRef, snap => { if(snap.exists()) setUserProfile(snap.data()) }, err => handleError(err, 'Profile'));
         const storesRef = collection(db, `artifacts/${appId}/public/data/stores`);
-        const stockListRef = doc(db, `artifacts/${appId}/public/config/settings/masterStockList`);
-
-        const unsubProfile = onSnapshot(profileRef, 
-            (snap) => {
-                if (snap.exists()) {
-                    const data = snap.data();
-                    setUserProfile({ role: data.role, storeId: data.storeId });
-                }
-            }, 
-            (err) => handleError(err, 'Profile Listener')
-        );
-
-        const unsubStores = onSnapshot(storesRef, 
-            (snapshot) => {
-                const newStores = {};
-                snapshot.forEach(doc => newStores[doc.id] = doc.data().name);
-                setStores(newStores);
-            }, 
-            (err) => handleError(err, 'Stores Listener')
-        );
-        
-        const unsubStockList = onSnapshot(stockListRef, (snap) => {
-            if (snap.exists()) {
-                setMasterStockList(snap.data().list);
-            }
-            // NOTE: Removed automatic creation of the master stock list.
-            // This was likely causing permission errors for non-admin users on first load.
-            // The document is now created/updated only within the Admin's Item Management view.
-        }, (err) => handleError(err, 'Stock List Listener'));
-
-        return () => {
-            unsubProfile();
-            unsubStores();
-            unsubStockList();
-        };
+        const unsubStores = onSnapshot(storesRef, snap => { const s = {}; snap.forEach(doc => s[doc.id] = doc.data().name); setStores(s); }, err => handleError(err, 'Stores'));
+        const stockListRef = doc(db, `artifacts/${appId}/public/config/settings`, "masterStockList");
+        const unsubStockList = onSnapshot(stockListRef, snap => { if(snap.exists()) setMasterStockList(snap.data().list) }, err => handleError(err, 'Stock List'));
+        return () => { unsubProfile(); unsubStores(); unsubStockList(); };
     }, [db, user]);
-
-    // --- Data Loading Trigger ---
-    useEffect(() => {
-        if (role && (role === USER_ROLES.ADMIN ? selectedStoreId : assignedStoreId)) {
-            setAppStatus('loading');
-            const storeToLoad = role === USER_ROLES.ADMIN ? selectedStoreId : assignedStoreId;
-            
-            const todayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeToLoad}-${selectedDate}`);
-            const yesterdayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeToLoad}-${getYesterdayDate()}`);
-            
-            let initialLoadsPending = 2; // Counter for initial data from listeners
-            const onInitialLoadDone = () => {
-                initialLoadsPending--;
-                if (initialLoadsPending <= 0) {
-                    setAppStatus('ready');
-                }
-            };
-
-            const unsubToday = onSnapshot(todayDocRef, (snap) => {
-                setCurrentStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList));
-                onInitialLoadDone();
-            }, (err) => { handleError(err, `Today's Stock Listener`); onInitialLoadDone(); });
-            
-            const unsubYesterday = onSnapshot(yesterdayDocRef, (snap) => {
-                setYesterdayStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList));
-                onInitialLoadDone();
-            }, (err) => { handleError(err, `Yesterday's Stock Listener`); onInitialLoadDone(); });
-            
-            return () => {
-                unsubToday();
-                unsubYesterday();
-            };
-        }
-    }, [db, role, assignedStoreId, selectedStoreId, selectedDate, masterStockList]);
     
-    // --- Business Logic ---
-    const calculateSold = useCallback((key) => {
-        const current = currentStock[key] || 0;
-        const yesterday = yesterdayStock[key] || 0;
-        return yesterday - current;
-    }, [currentStock, yesterdayStock]);
+    const activeStoreId = useMemo(() => {
+        if (role === USER_ROLES.ADMIN) return selectedStoreId;
+        return assignedStoreId;
+    }, [role, selectedStoreId, assignedStoreId]);
 
-    const soldStockSummary = useMemo(() => {
-        return Object.keys(masterStockList).reduce((total, category) => {
-            const categoryTotal = masterStockList[category].reduce((catTotal, item) => {
-                const key = `${category}-${item}`;
-                const sold = calculateSold(key);
-                return catTotal + (sold > 0 ? sold : 0);
-            }, 0);
-            return total + categoryTotal;
-        }, 0);
-    }, [calculateSold, masterStockList]);
+    useEffect(() => {
+        if (!db || !activeStoreId || !role) {
+             if (role) setAppStatus('ready'); // Ready but waiting for store selection
+             return;
+        }
+        setAppStatus('loading');
+        const todayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${activeStoreId}-${selectedDate}`);
+        const yesterdayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${activeStoreId}-${getYesterdayDate(selectedDate)}`);
+        
+        const unsubToday = onSnapshot(todayDocRef, snap => { setCurrentStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList)); }, err => handleError(err, `Today's Stock`));
+        const unsubYesterday = onSnapshot(yesterdayDocRef, snap => { setYesterdayStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList)); }, err => handleError(err, `Yesterday's Stock`));
+        
+        const timer = setTimeout(() => setAppStatus('ready'), 1500);
 
-    // --- Actions ---
-    const handleLogout = () => signOut(auth).catch(err => handleError(err, 'Logout'));
+        return () => { unsubToday(); unsubYesterday(); clearTimeout(timer) };
+    }, [db, activeStoreId, selectedDate, masterStockList, role]);
 
     const handleAuthSuccess = async (authUser, username) => {
-        if (!isFirstUser) {
-            setShowAuthModal(false);
-            return;
+        if (isFirstUser) {
+            const profileRef = doc(db, `artifacts/${appId}/users/${authUser.uid}/user_config/profile`);
+            const setupRef = doc(db, `artifacts/${appId}/public/config/settings`, "setup");
+            const batch = writeBatch(db);
+            batch.set(profileRef, { role: USER_ROLES.ADMIN, storeId: null, username });
+            batch.set(setupRef, { setupComplete: true });
+            await batch.commit();
+            setIsFirstUser(false);
         }
-        const profileRef = doc(db, `artifacts/${appId}/users/${authUser.uid}/user_config/profile`);
-        const setupRef = doc(db, `artifacts/${appId}/public/config/settings/setup`);
-        const batch = writeBatch(db);
-        batch.set(profileRef, { role: USER_ROLES.ADMIN, storeId: null, username });
-        batch.set(setupRef, { setupComplete: true, timestamp: new Date().toISOString() });
-        await batch.commit();
-        setIsFirstUser(false);
         setShowAuthModal(false);
     };
-
+    
     const saveStock = async () => {
-        const storeToSave = role === USER_ROLES.ADMIN ? selectedStoreId : assignedStoreId;
-        if (!storeToSave) return showToast('No store selected.', 'error');
-
-        const confirmed = await showConfirm({
-            title: 'Confirm Stock Entry',
-            message: `Save stock for ${stores[storeToSave]} on ${selectedDate}?`,
-            confirmText: 'Save',
-            confirmColor: 'orange'
-        });
+        if (!activeStoreId) return showToast('No store selected.', 'error');
+        const confirmed = await showConfirm({ title: 'Confirm Stock Entry', message: `Save stock for ${stores[activeStoreId]} on ${selectedDate}?`});
         if (!confirmed) return;
-
-        setIsSaving(true);
-        setHasSaveError(false);
-        const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${storeToSave}-${selectedDate}`);
+        setIsSaving(true); setHasSaveError(false);
+        const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${activeStoreId}-${selectedDate}`);
         try {
-            await setDoc(docRef, {
-                storeId: storeToSave,
-                date: selectedDate,
-                stock: currentStock,
-                userId: user.uid,
-                timestamp: new Date().toISOString()
-            });
-            showToast('Stock saved successfully!', 'success');
+            await setDoc(docRef, { storeId: activeStoreId, date: selectedDate, stock: currentStock, userId: user.uid, timestamp: new Date().toISOString() }, { merge: true });
+            showToast('Stock saved!', 'success');
         } catch (error) {
-            setHasSaveError(true);
-            handleError(error, 'Save Stock');
-            showToast('Failed to save stock. Check connection.', 'error');
+            setHasSaveError(true); handleError(error, 'Save Stock'); showToast('Failed to save stock.', 'error');
         } finally {
             setIsSaving(false);
         }
     };
     
-    // --- Render Logic ---
-    if (appStatus === 'initializing' || (user && !role)) {
-        return <LoadingSpinner message="Initializing App..." />;
-    }
-    if (appStatus === 'error') {
-        return <div className="p-4 text-center text-red-500">Error: {appError.message} ({appError.context})</div>;
-    }
-    if (appStatus === 'authenticating') {
-        return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
-                {showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => setShowAuthModal(false)} isFirstUser={isFirstUser} />}
-            </div>
-        );
-    }
-    
-    const storeName = stores[selectedStoreId] || 'Select Store';
+    const calculateSold = useCallback(key => (yesterdayStock[key] || 0) - (currentStock[key] || 0), [currentStock, yesterdayStock]);
+    const soldStockSummary = useMemo(() => {
+        if (!masterStockList || typeof masterStockList !== 'object') return 0;
+        return Object.values(masterStockList).flat().reduce((sum, item) => {
+            // This logic is flawed because `item` is a string, not an object.
+            // Correcting this based on the expected structure of masterStockList.
+            const key = Object.keys(masterStockList).find(cat => masterStockList[cat].includes(item)) + `-${item}`;
+            const sold = calculateSold(key);
+            return sum + (sold > 0 ? sold : 0);
+        }, 0).toFixed(2);
+    }, [calculateSold, masterStockList, currentStock, yesterdayStock]);
+
 
     const renderView = () => {
-        if (!role) return <LoadingSpinner message="Loading user profile..." />;
-
-        if (view === VIEWS.HOME || (role === USER_ROLES.STAFF && !assignedStoreId) || (role === USER_ROLES.ADMIN && Object.keys(stores).length > 0 && !selectedStoreId)) {
-            return (
+        if (!role) return <LoadingSpinner message="Loading profile..." />;
+        if (!activeStoreId) {
+             if (role === USER_ROLES.ADMIN && Object.keys(stores).length === 0) {
+                 return <div className="p-4 text-center"><button onClick={() => setView(VIEWS.ADMIN_FUNCTIONS)} className="text-orange-600 font-bold">No stores found. Go to Admin to create one.</button></div>;
+             }
+             return (
                 <div className="p-4 space-y-4">
+                    <h2 className="text-2xl font-bold text-center font-display">Select a Store</h2>
                     {Object.entries(stores).map(([id, name]) => {
                         if (role === USER_ROLES.STAFF && id !== assignedStoreId) return null;
-                        return (
-                            <div key={id} className="bg-white rounded-xl p-4 shadow-lg border-l-4 border-orange-600">
-                                <p className="font-display text-lg font-bold text-gray-900">{name}</p>
-                                <div className="flex gap-3 mt-3">
-                                    <button onClick={() => { setSelectedStoreId(id); setView(VIEWS.ENTRY); }} className="flex-1 bg-orange-600 text-white font-bold py-2 px-4 rounded-lg">Stock Entry</button>
-                                    {role === USER_ROLES.ADMIN && <button onClick={() => { setSelectedStoreId(id); setView(VIEWS.ADMIN_FUNCTIONS); }} className="flex-1 border border-orange-600 text-orange-600 font-bold py-2 px-4 rounded-lg">Admin</button>}
-                                </div>
-                            </div>
-                        );
+                        return <button key={id} onClick={() => setSelectedStoreId(id)} className="w-full text-left bg-white rounded-xl p-4 shadow-lg border-l-4 border-orange-600 hover:bg-orange-50 transition"><p className="font-display text-lg font-bold text-gray-900">{name}</p></button>;
                     })}
-                    {role === USER_ROLES.ADMIN && Object.keys(stores).length === 0 && (
-                        <div className="text-center p-4 bg-white rounded-xl shadow">
-                            <p>No stores found. Go to Admin to create one.</p>
-                        </div>
-                    )}
                 </div>
             );
         }
         
         switch (view) {
-            case VIEWS.ENTRY:
-                return <StockEntryView storeName={storeName} stockData={currentStock} setStockData={setCurrentStock} saveStock={saveStock} isSaving={isSaving} selectedDate={selectedDate} setSelectedDate={setSelectedDate} masterStockList={masterStockList} hasSaveError={hasSaveError} />;
-            case VIEWS.ADMIN_FUNCTIONS:
-                return (
+            case VIEWS.ENTRY: return <StockEntryView storeName={stores[activeStoreId]} stockData={currentStock} setStockData={setCurrentStock} saveStock={saveStock} isSaving={isSaving} selectedDate={selectedDate} setSelectedDate={setSelectedDate} masterStockList={masterStockList} hasSaveError={hasSaveError} />;
+            case VIEWS.SOLD: return <StockSoldView currentStock={currentStock} yesterdayStock={yesterdayStock} calculateSold={calculateSold} soldStockSummary={soldStockSummary} masterStockList={masterStockList} />;
+            case VIEWS.ORDER: return <OrderingView currentStock={currentStock} orderQuantities={orderQuantities} setOrderQuantities={setOrderQuantities} stores={stores} selectedStoreId={activeStoreId} showToast={showToast} masterStockList={masterStockList}/>;
+            case VIEWS.ADMIN_FUNCTIONS: return (
                     <div className="p-4 grid grid-cols-2 gap-4">
-                        <button onClick={() => setView(VIEWS.SOLD)} className="p-4 bg-white rounded-xl shadow-lg text-center font-bold">Sold Report</button>
-                        <button onClick={() => setView(VIEWS.ORDER)} className="p-4 bg-white rounded-xl shadow-lg text-center font-bold">Ordering</button>
-                        <button onClick={() => setView(VIEWS.USER_MANAGER)} className="p-4 bg-white rounded-xl shadow-lg text-center font-bold">Users</button>
-                        <button onClick={() => setView(VIEWS.STORE_MANAGER)} className="p-4 bg-white rounded-xl shadow-lg text-center font-bold">Stores</button>
-                        <button onClick={() => setView(VIEWS.ITEM_MANAGER)} className="p-4 bg-white rounded-xl shadow-lg text-center font-bold">Items</button>
+                        <button onClick={() => setView(VIEWS.USER_MANAGER)} className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg text-center font-bold hover:bg-gray-50"><Users className="mb-2 text-orange-600"/>Users</button>
+                        <button onClick={() => setView(VIEWS.STORE_MANAGER)} className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg text-center font-bold hover:bg-gray-50"><Store className="mb-2 text-orange-600"/>Stores</button>
+                        <button onClick={() => setView(VIEWS.ITEM_MANAGER)} className="flex flex-col items-center justify-center p-4 bg-white rounded-xl shadow-lg text-center font-bold hover:bg-gray-50"><Package className="mb-2 text-orange-600"/>Items</button>
                     </div>
                 );
-            case VIEWS.SOLD:
-                 return <StockSoldView currentStock={currentStock} yesterdayStock={yesterdayStock} calculateSold={calculateSold} soldStockSummary={soldStockSummary} masterStockList={masterStockList} />;
-            case VIEWS.ORDER:
-                return <OrderingView currentStock={currentStock} orderQuantities={orderQuantities} setOrderQuantities={setOrderQuantities} stores={stores} selectedStoreId={selectedStoreId} showToast={showToast} masterStockList={masterStockList}/>;
-            case VIEWS.USER_MANAGER:
-                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} showToast={showToast} />;
-            case VIEWS.STORE_MANAGER:
-                return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
-            case VIEWS.ITEM_MANAGER:
-                return <StockItemManagementView db={db} appId={appId} masterStockList={masterStockList} showToast={showToast} showConfirm={showConfirm} />;
-            default:
-                setView(VIEWS.HOME);
-                return null;
+            case VIEWS.USER_MANAGER: return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} showToast={showToast} />;
+            case VIEWS.STORE_MANAGER: return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
+            case VIEWS.ITEM_MANAGER: return <StockItemManagementView db={db} appId={appId} masterStockList={masterStockList} showToast={showToast} showConfirm={showConfirm} />;
+            default: return null; // Home is handled by store selection
         }
     };
     
-    // Determine which store is active for display and actions
-    const activeStoreId = role === USER_ROLES.ADMIN ? selectedStoreId : assignedStoreId;
+    if (isConfigNeeded) return <FirebaseConfigModal onConfigSaved={setFirebaseConfig} />;
+    if (appStatus === 'initializing' || (!auth && !showAuthModal)) return <LoadingSpinner message="Initializing App..." />;
+    if (appStatus === 'error') return <div className="p-4 text-center text-red-500">Error: {appError.message}</div>;
+    
+    const showBackButton = view !== VIEWS.HOME && !!activeStoreId;
+    const handleBack = () => {
+        if ([VIEWS.USER_MANAGER, VIEWS.STORE_MANAGER, VIEWS.ITEM_MANAGER].includes(view)) {
+            setView(VIEWS.ADMIN_FUNCTIONS);
+        } else if (view === VIEWS.ADMIN_FUNCTIONS) {
+            setView(VIEWS.HOME);
+            setSelectedStoreId('');
+        }
+        else {
+            setView(VIEWS.HOME);
+            setSelectedStoreId('');
+        }
+    };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;700&family=Poppins:wght@700&display=swap'); body { font-family: 'Inter', sans-serif; } .font-display { font-family: 'Poppins', sans-serif; } @keyframes slideInRight { from { transform: translateX(100%); } to { transform: translateX(0); } } .animate-slideInRight { animation: slideInRight 0.3s ease-out forwards; }`}</style>
+        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-24">
+            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@700;800&display=swap'); body { font-family: 'Inter', sans-serif; } .font-display { font-family: 'Poppins', sans-serif; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; } @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .animate-slideInRight { animation: slideInRight 0.3s ease-out forwards; }`}</style>
             
             <ToastContainer toasts={toasts} removeToast={removeToast} />
             {confirmDialog && <ConfirmModal {...confirmDialog} />}
+            {appStatus === 'authenticating' && showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => !isFirstUser && setShowAuthModal(false)} isFirstUser={isFirstUser} />}
 
-            <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
-                <h1 className="text-xl font-bold font-display text-gray-900 tracking-wider">
-                    {activeStoreId ? stores[activeStoreId] : 'SUJATA MASTANI'}
-                </h1>
-                <div className="flex items-center space-x-3">
-                    <span className={`px-3 py-1 text-xs font-semibold rounded-full ${role === 'admin' ? 'bg-orange-500 text-white' : 'bg-blue-500 text-white'}`}>
-                        {role ? role.toUpperCase() : '...'}
-                    </span>
-                    <button onClick={handleLogout} className="p-2 rounded-full bg-red-600 hover:bg-red-700 text-white transition"><LogOut className="w-5 h-5" /></button>
-                </div>
-            </header>
-
-            <main className="max-w-lg mx-auto pt-2 pb-4">
-                {appStatus === 'loading' ? <LoadingSpinner message="Loading Data..."/> : renderView()}
-            </main>
-            
-            <NavBar currentView={view} setView={setView} role={role} onHomeClick={() => { setView(VIEWS.HOME); setSelectedStoreId(''); }} />
+            {user && (
+                <>
+                    <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
+                        <div className="flex items-center gap-2">
+                           {showBackButton && <button onClick={handleBack} className="p-2 -ml-2 text-gray-600 hover:text-orange-600"><ArrowLeft /></button>}
+                           <h1 className="text-xl font-bold font-display text-gray-900 tracking-wider">
+                                {activeStoreId ? stores[activeStoreId] : 'SUJATA MASTANI'}
+                           </h1>
+                        </div>
+                        <div className="flex items-center space-x-3">
+                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${role === 'admin' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                                {role ? role.toUpperCase() : '...'}
+                            </span>
+                            <button onClick={() => showConfirm({ title: 'Logout', message: 'Are you sure you want to log out?', onConfirm: () => signOut(auth)})} className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 transition"><LogOut className="w-5 h-5" /></button>
+                        </div>
+                    </header>
+                    <main className="max-w-lg mx-auto pt-2 pb-4">
+                        {appStatus === 'loading' ? <LoadingSpinner message="Loading Data..."/> : renderView()}
+                    </main>
+                    {activeStoreId && <NavBar currentView={view} setView={setView} role={role} />}
+                </>
+            )}
         </div>
     );
 };
 
 export default App;
+
