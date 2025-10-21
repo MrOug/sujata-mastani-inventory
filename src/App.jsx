@@ -557,14 +557,12 @@ const NavBar = ({ currentView, setView, role }) => {
 
 // --- Main App Component ---
 function App() {
-    const [firebaseConfig, setFirebaseConfig] = useState(null);
-    const [isConfigNeeded, setIsConfigNeeded] = useState(false);
-    
+    const [appStatus, setAppStatus] = useState('initializing'); // initializing, config_needed, authenticating, loading_data, ready, error
     const [db, setDb] = useState(null);
     const [auth, setAuth] = useState(null);
+    
     const [user, setUser] = useState(null);
     const [userProfile, setUserProfile] = useState({ role: null, storeId: null });
-    const [appStatus, setAppStatus] = useState('initializing');
     const [appError, setAppError] = useState(null);
 
     const [stores, setStores] = useState({});
@@ -590,48 +588,44 @@ function App() {
     const showConfirm = useCallback(options => new Promise(resolve => setConfirmDialog({ ...options, onConfirm: () => { setConfirmDialog(null); resolve(true); }, onCancel: () => { setConfirmDialog(null); resolve(false); } })), []);
     const handleError = (error, context = 'Unknown') => { console.error(`Error in ${context}:`, error); setAppError({ message: error.message, context }); setAppStatus('error'); };
 
+    // This is the main initialization effect. It runs only once.
     useEffect(() => {
-        // 1. Try to get config from global variable
         let config = null;
         try {
             if (typeof __firebase_config !== 'undefined' && __firebase_config !== '{}') {
                 config = JSON.parse(__firebase_config);
             }
-        } catch (e) { /* ignore parse error */ }
+        } catch (e) { /* ignore */ }
 
-        // 2. If not found, try localStorage
         if (!config || !config.apiKey) {
             try {
                 const storedConfig = localStorage.getItem('firebaseConfig');
                 if (storedConfig) {
                     config = JSON.parse(storedConfig);
                 }
-            } catch (e) { /* ignore parse error */ }
+            } catch (e) { /* ignore */ }
         }
 
-        // 3. If a valid config is found, set it. Otherwise, prompt the user.
         if (config && config.apiKey) {
-            setFirebaseConfig(config);
+            try {
+                const app = initializeApp(config);
+                const firestore = getFirestore(app);
+                const authentication = getAuth(app);
+                setDb(firestore);
+                setAuth(authentication);
+                // Now that we have auth, we can let the auth listener take over
+            } catch (error) {
+                handleError(error, 'Firebase Initialization');
+            }
         } else {
-            setIsConfigNeeded(true);
+            setAppStatus('config_needed');
         }
     }, []);
 
-    useEffect(() => {
-        if (!firebaseConfig) return;
-
-        try {
-            const app = initializeApp(firebaseConfig);
-            setDb(getFirestore(app));
-            setAuth(getAuth(app));
-            setIsConfigNeeded(false); // Hide modal if it was open
-        } catch (error) {
-            handleError(error, 'Firebase Initialization');
-        }
-    }, [firebaseConfig]);
-    
+    // This effect handles authentication state changes
     useEffect(() => {
         if (!auth || !db) return;
+
         const checkFirstUser = async () => {
              try {
                 const usersCollectionRef = collection(db, `artifacts/${appId}/users`);
@@ -640,7 +634,7 @@ function App() {
                 setIsFirstUser(querySnapshot.empty);
             } catch (error) {
                 console.warn("Could not check for first user:", error.message);
-                setIsFirstUser(false);
+                setIsFirstUser(false); // Default to false if check fails
             }
         };
 
@@ -648,6 +642,7 @@ function App() {
             if (authUser) {
                 setUser(authUser);
                 setShowAuthModal(false);
+                setAppStatus('loading_data');
             } else {
                 setUser(null);
                 setUserProfile({ role: null, storeId: null });
@@ -659,67 +654,53 @@ function App() {
         return () => unsubscribe();
     }, [auth, db]);
 
-    // This effect handles the initial loading of essential app data (profile, stores, items)
+    // This effect handles loading essential data after a user is authenticated
     useEffect(() => {
-        if (!db || !user) return;
-        
-        setAppStatus('loading');
+        if (appStatus !== 'loading_data' || !db || !user) return;
         
         const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_config/profile`);
         const storesRef = collection(db, `artifacts/${appId}/public/data/stores`);
         const stockListRef = doc(db, `artifacts/${appId}/public/config/settings`, "masterStockList");
 
-        const unsubProfile = onSnapshot(profileRef, 
-            (snap) => { 
-                if(snap.exists()) {
-                    setUserProfile(snap.data());
+        const unsubProfile = onSnapshot(profileRef, (snap) => { if(snap.exists()) setUserProfile(snap.data()) }, err => handleError(err, 'Profile'));
+        const unsubStores = onSnapshot(storesRef, (snap) => { const s={}; snap.forEach(doc => s[doc.id] = doc.data().name); setStores(s); }, err => handleError(err, 'Stores'));
+        const unsubStockList = onSnapshot(stockListRef, (snap) => { if(snap.exists()) setMasterStockList(snap.data().list) }, err => handleError(err, 'Stock List'));
+        
+        // Check when essential data is loaded to move to 'ready' state
+        const checkDataLoaded = async () => {
+            try {
+                const profileSnap = await getDoc(profileRef);
+                if (profileSnap.exists()) {
+                     // All good, data will be streamed by onSnapshot
+                    setAppStatus('ready');
                 } else {
-                    // This handles a race condition where a user is authenticated but their profile isn't created yet.
-                    // We'll give it a moment, but if it's still not there, we'll assume it's an issue and stop loading.
+                    // It might take a moment for the profile to be created after signup
                     setTimeout(() => {
                         getDoc(profileRef).then(s => {
-                            if (!s.exists()) {
-                                setAppStatus('ready'); // Stop loading, let the UI show an appropriate state
+                            if (s.exists()) {
+                                setAppStatus('ready');
+                            } else {
+                                handleError({ message: 'User profile not found.' }, 'Data Loading');
                             }
-                        })
-                    }, 2000);
+                        });
+                    }, 2500);
                 }
-            }, 
-            err => handleError(err, 'Profile')
-        );
+            } catch (err) {
+                handleError(err, "Initial Data Fetch");
+            }
+        };
 
-        const unsubStores = onSnapshot(storesRef, 
-            () => { /* Data is set in the main listener below */ }, 
-            err => handleError(err, 'Stores')
-        );
-
-        const unsubStockList = onSnapshot(stockListRef, 
-            () => { /* Data is set in the main listener below */ }, 
-            err => handleError(err, 'Stock List')
-        );
-        
-        // A combined listener to determine when all initial data is ready
-        Promise.all([
-            getDoc(profileRef),
-            getDoc(stockListRef),
-            getDocs(query(storesRef))
-        ]).then(([profileSnap, stockListSnap, storesSnap]) => {
-            if (profileSnap.exists()) setUserProfile(profileSnap.data());
-            if (stockListSnap.exists()) setMasterStockList(stockListSnap.data().list);
-            const s = {}; storesSnap.forEach(doc => s[doc.id] = doc.data().name); setStores(s);
-            setAppStatus('ready');
-        }).catch(err => handleError(err, "Initial Data Fetch"));
-
+        checkDataLoaded();
 
         return () => { unsubProfile(); unsubStores(); unsubStockList(); };
-    }, [db, user]);
+    }, [appStatus, db, user]);
     
     const activeStoreId = useMemo(() => {
         if (role === USER_ROLES.ADMIN) return selectedStoreId;
         return assignedStoreId;
     }, [role, selectedStoreId, assignedStoreId]);
 
-    // This effect specifically handles loading data for the *selected* store and date
+    // This effect loads store-specific daily stock data
     useEffect(() => {
         if (!db || !activeStoreId || !role || appStatus !== 'ready') return;
 
@@ -732,8 +713,15 @@ function App() {
         return () => { unsubToday(); unsubYesterday(); };
     }, [db, activeStoreId, selectedDate, masterStockList, role, appStatus]);
 
+    const handleConfigSaved = (config) => {
+        setAppStatus('initializing'); // Go back to initializing with the new config
+        // This will trigger the main initialization useEffect again
+        window.location.reload(); 
+    };
+    
     const handleAuthSuccess = async (authUser, username) => {
         if (isFirstUser) {
+            setAppStatus('loading_data'); // Show loader while creating first admin
             const profileRef = doc(db, `artifacts/${appId}/users/${authUser.uid}/user_config/profile`);
             const setupRef = doc(db, `artifacts/${appId}/public/config/settings`, "setup");
             const batch = writeBatch(db);
@@ -742,6 +730,7 @@ function App() {
             await batch.commit();
             setIsFirstUser(false);
         }
+        // For existing users, the auth listener will set the status
         setShowAuthModal(false);
     };
     
@@ -818,8 +807,8 @@ function App() {
         }
     };
     
-    if (isConfigNeeded) return <FirebaseConfigModal onConfigSaved={setFirebaseConfig} />;
-    if (appStatus === 'initializing' || appStatus === 'authenticating' || (user && appStatus !== 'ready' && appStatus !== 'error')) return <LoadingSpinner message={appStatus === 'loading' ? 'Loading Data...' : 'Initializing App...'} />;
+    if (appStatus === 'initializing') return <LoadingSpinner message="Initializing App..." />;
+    if (appStatus === 'config_needed') return <FirebaseConfigModal onConfigSaved={handleConfigSaved} />;
     if (appStatus === 'error') return <div className="p-4 text-center text-red-500">Error: {appError.message}</div>;
     
     const showBackButton = view !== VIEWS.HOME && !!activeStoreId;
@@ -843,9 +832,12 @@ function App() {
                 
                 <ToastContainer toasts={toasts} removeToast={removeToast} />
                 {confirmDialog && <ConfirmModal {...confirmDialog} />}
-                {showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => !isFirstUser && setShowAuthModal(false)} isFirstUser={isFirstUser} />}
+                
+                {appStatus === 'authenticating' && showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => !isFirstUser && setShowAuthModal(false)} isFirstUser={isFirstUser} />}
 
-                {user && (
+                {appStatus === 'loading_data' && <LoadingSpinner message="Loading Data..." />}
+
+                {appStatus === 'ready' && user && (
                     <>
                         <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
                             <div className="flex items-center gap-2">
