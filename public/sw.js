@@ -1,8 +1,9 @@
 // Service Worker for PWA
-const CACHE_NAME = 'sujata-mastani-v1';
+const CACHE_NAME = 'sujata-mastani-v2'; // Incremented cache version
 const urlsToCache = [
   '/',
   '/index.html',
+  // Add other static assets you want to cache here
 ];
 
 // Install event - cache essential files
@@ -21,6 +22,7 @@ self.addEventListener('activate', (event) => {
       return Promise.all(
         cacheNames.map((cacheName) => {
           if (cacheName !== CACHE_NAME) {
+            console.log('Deleting old cache:', cacheName);
             return caches.delete(cacheName);
           }
         })
@@ -32,6 +34,16 @@ self.addEventListener('activate', (event) => {
 
 // Fetch event - serve from cache, fallback to network
 self.addEventListener('fetch', (event) => {
+  const requestUrl = new URL(event.request.url);
+
+  // *** FIX ***
+  // Do not cache Firestore requests. Let them pass through to the network.
+  // This prevents the NS_BINDING_ABORTED error.
+  if (requestUrl.hostname === 'firestore.googleapis.com') {
+    return; // Let the browser handle the request
+  }
+
+  // For other requests, use a cache-first strategy.
   event.respondWith(
     caches.match(event.request)
       .then((response) => {
@@ -39,20 +51,22 @@ self.addEventListener('fetch', (event) => {
         if (response) {
           return response;
         }
-        // Clone the request
-        const fetchRequest = event.request.clone();
-        return fetch(fetchRequest).then((response) => {
-          // Check if valid response
-          if (!response || response.status !== 200 || response.type !== 'basic') {
-            return response;
+
+        // Not in cache - fetch from network and cache it
+        return fetch(event.request).then((networkResponse) => {
+          // Check if we received a valid response
+          if (!networkResponse || networkResponse.status !== 200 || networkResponse.type !== 'basic') {
+            return networkResponse;
           }
+
           // Clone the response
-          const responseToCache = response.clone();
+          const responseToCache = networkResponse.clone();
           caches.open(CACHE_NAME)
             .then((cache) => {
               cache.put(event.request, responseToCache);
             });
-          return response;
+
+          return networkResponse;
         });
       })
   );
