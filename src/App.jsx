@@ -659,15 +659,58 @@ function App() {
         return () => unsubscribe();
     }, [auth, db]);
 
+    // This effect handles the initial loading of essential app data (profile, stores, items)
     useEffect(() => {
         if (!db || !user) return;
+        
         setAppStatus('loading');
+        
         const profileRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_config/profile`);
-        const unsubProfile = onSnapshot(profileRef, snap => { if(snap.exists()) setUserProfile(snap.data()) }, err => handleError(err, 'Profile'));
         const storesRef = collection(db, `artifacts/${appId}/public/data/stores`);
-        const unsubStores = onSnapshot(storesRef, snap => { const s = {}; snap.forEach(doc => s[doc.id] = doc.data().name); setStores(s); }, err => handleError(err, 'Stores'));
         const stockListRef = doc(db, `artifacts/${appId}/public/config/settings`, "masterStockList");
-        const unsubStockList = onSnapshot(stockListRef, snap => { if(snap.exists()) setMasterStockList(snap.data().list) }, err => handleError(err, 'Stock List'));
+
+        const unsubProfile = onSnapshot(profileRef, 
+            (snap) => { 
+                if(snap.exists()) {
+                    setUserProfile(snap.data());
+                } else {
+                    // This handles a race condition where a user is authenticated but their profile isn't created yet.
+                    // We'll give it a moment, but if it's still not there, we'll assume it's an issue and stop loading.
+                    setTimeout(() => {
+                        getDoc(profileRef).then(s => {
+                            if (!s.exists()) {
+                                setAppStatus('ready'); // Stop loading, let the UI show an appropriate state
+                            }
+                        })
+                    }, 2000);
+                }
+            }, 
+            err => handleError(err, 'Profile')
+        );
+
+        const unsubStores = onSnapshot(storesRef, 
+            () => { /* Data is set in the main listener below */ }, 
+            err => handleError(err, 'Stores')
+        );
+
+        const unsubStockList = onSnapshot(stockListRef, 
+            () => { /* Data is set in the main listener below */ }, 
+            err => handleError(err, 'Stock List')
+        );
+        
+        // A combined listener to determine when all initial data is ready
+        Promise.all([
+            getDoc(profileRef),
+            getDoc(stockListRef),
+            getDocs(query(storesRef))
+        ]).then(([profileSnap, stockListSnap, storesSnap]) => {
+            if (profileSnap.exists()) setUserProfile(profileSnap.data());
+            if (stockListSnap.exists()) setMasterStockList(stockListSnap.data().list);
+            const s = {}; storesSnap.forEach(doc => s[doc.id] = doc.data().name); setStores(s);
+            setAppStatus('ready');
+        }).catch(err => handleError(err, "Initial Data Fetch"));
+
+
         return () => { unsubProfile(); unsubStores(); unsubStockList(); };
     }, [db, user]);
     
@@ -676,22 +719,18 @@ function App() {
         return assignedStoreId;
     }, [role, selectedStoreId, assignedStoreId]);
 
+    // This effect specifically handles loading data for the *selected* store and date
     useEffect(() => {
-        if (!db || !activeStoreId || !role) {
-             if (role) setAppStatus('ready'); // Ready but waiting for store selection
-             return;
-        }
-        setAppStatus('loading');
+        if (!db || !activeStoreId || !role || appStatus !== 'ready') return;
+
         const todayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${activeStoreId}-${selectedDate}`);
         const yesterdayDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${activeStoreId}-${getYesterdayDate(selectedDate)}`);
         
         const unsubToday = onSnapshot(todayDocRef, snap => { setCurrentStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList)); }, err => handleError(err, `Today's Stock`));
         const unsubYesterday = onSnapshot(yesterdayDocRef, snap => { setYesterdayStock(snap.exists() ? { ...getEmptyStock(masterStockList), ...snap.data().stock } : getEmptyStock(masterStockList)); }, err => handleError(err, `Yesterday's Stock`));
         
-        const timer = setTimeout(() => setAppStatus('ready'), 1500);
-
-        return () => { unsubToday(); unsubYesterday(); clearTimeout(timer) };
-    }, [db, activeStoreId, selectedDate, masterStockList, role]);
+        return () => { unsubToday(); unsubYesterday(); };
+    }, [db, activeStoreId, selectedDate, masterStockList, role, appStatus]);
 
     const handleAuthSuccess = async (authUser, username) => {
         if (isFirstUser) {
@@ -722,21 +761,30 @@ function App() {
         }
     };
     
-    const calculateSold = useCallback(key => (yesterdayStock[key] || 0) - (currentStock[key] || 0), [currentStock, yesterdayStock]);
+    const calculateSold = useCallback(key => {
+        const yesterday = yesterdayStock[key] || 0;
+        const current = currentStock[key] || 0;
+        return yesterday - current;
+    }, [currentStock, yesterdayStock]);
+
     const soldStockSummary = useMemo(() => {
-        if (!masterStockList || typeof masterStockList !== 'object') return 0;
-        return Object.values(masterStockList).flat().reduce((sum, item) => {
-            // This logic is flawed because `item` is a string, not an object.
-            // Correcting this based on the expected structure of masterStockList.
-            const key = Object.keys(masterStockList).find(cat => masterStockList[cat].includes(item)) + `-${item}`;
-            const sold = calculateSold(key);
-            return sum + (sold > 0 ? sold : 0);
-        }, 0).toFixed(2);
-    }, [calculateSold, masterStockList, currentStock, yesterdayStock]);
+        if (!masterStockList || typeof masterStockList !== 'object') return '0.00';
+        let totalSold = 0;
+        for (const category in masterStockList) {
+            for (const item of masterStockList[category]) {
+                const key = `${category}-${item}`;
+                const sold = calculateSold(key);
+                if (sold > 0) {
+                    totalSold += sold;
+                }
+            }
+        }
+        return totalSold.toFixed(2);
+    }, [calculateSold, masterStockList]);
 
 
     const renderView = () => {
-        if (!role) return <LoadingSpinner message="Loading profile..." />;
+        if (!role) return <LoadingSpinner message="Waiting for user profile..." />;
         if (!activeStoreId) {
              if (role === USER_ROLES.ADMIN && Object.keys(stores).length === 0) {
                  return <div className="p-4 text-center"><button onClick={() => setView(VIEWS.ADMIN_FUNCTIONS)} className="text-orange-600 font-bold">No stores found. Go to Admin to create one.</button></div>;
@@ -771,7 +819,7 @@ function App() {
     };
     
     if (isConfigNeeded) return <FirebaseConfigModal onConfigSaved={setFirebaseConfig} />;
-    if (appStatus === 'initializing' || (!auth && !showAuthModal)) return <LoadingSpinner message="Initializing App..." />;
+    if (appStatus === 'initializing' || appStatus === 'authenticating' || (user && appStatus !== 'ready' && appStatus !== 'error')) return <LoadingSpinner message={appStatus === 'loading' ? 'Loading Data...' : 'Initializing App...'} />;
     if (appStatus === 'error') return <div className="p-4 text-center text-red-500">Error: {appError.message}</div>;
     
     const showBackButton = view !== VIEWS.HOME && !!activeStoreId;
@@ -789,35 +837,37 @@ function App() {
     };
 
     return (
-        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-24">
-            <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@700;800&display=swap'); body { font-family: 'Inter', sans-serif; } .font-display { font-family: 'Poppins', sans-serif; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; } @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .animate-slideInRight { animation: slideInRight 0.3s ease-out forwards; }`}</style>
-            
-            <ToastContainer toasts={toasts} removeToast={removeToast} />
-            {confirmDialog && <ConfirmModal {...confirmDialog} />}
-            {appStatus === 'authenticating' && showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => !isFirstUser && setShowAuthModal(false)} isFirstUser={isFirstUser} />}
+        <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased">
+            <div className="max-w-lg mx-auto bg-gray-50 min-h-screen flex flex-col">
+                <style>{`@import url('https://fonts.googleapis.com/css2?family=Inter:wght@400;500;700&family=Poppins:wght@700;800&display=swap'); body { font-family: 'Inter', sans-serif; } .font-display { font-family: 'Poppins', sans-serif; } @keyframes fadeIn { from { opacity: 0; } to { opacity: 1; } } .animate-fadeIn { animation: fadeIn 0.3s ease-out forwards; } @keyframes slideInRight { from { transform: translateX(100%); opacity: 0; } to { transform: translateX(0); opacity: 1; } } .animate-slideInRight { animation: slideInRight 0.3s ease-out forwards; }`}</style>
+                
+                <ToastContainer toasts={toasts} removeToast={removeToast} />
+                {confirmDialog && <ConfirmModal {...confirmDialog} />}
+                {showAuthModal && <AuthModal auth={auth} onLoginSuccess={handleAuthSuccess} onClose={() => !isFirstUser && setShowAuthModal(false)} isFirstUser={isFirstUser} />}
 
-            {user && (
-                <>
-                    <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
-                        <div className="flex items-center gap-2">
-                           {showBackButton && <button onClick={handleBack} className="p-2 -ml-2 text-gray-600 hover:text-orange-600"><ArrowLeft /></button>}
-                           <h1 className="text-xl font-bold font-display text-gray-900 tracking-wider">
-                                {activeStoreId ? stores[activeStoreId] : 'SUJATA MASTANI'}
-                           </h1>
-                        </div>
-                        <div className="flex items-center space-x-3">
-                            <span className={`px-3 py-1 text-xs font-semibold rounded-full ${role === 'admin' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
-                                {role ? role.toUpperCase() : '...'}
-                            </span>
-                            <button onClick={() => showConfirm({ title: 'Logout', message: 'Are you sure you want to log out?', onConfirm: () => signOut(auth)})} className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 transition"><LogOut className="w-5 h-5" /></button>
-                        </div>
-                    </header>
-                    <main className="max-w-lg mx-auto pt-2 pb-4">
-                        {appStatus === 'loading' ? <LoadingSpinner message="Loading Data..."/> : renderView()}
-                    </main>
-                    {activeStoreId && <NavBar currentView={view} setView={setView} role={role} />}
-                </>
-            )}
+                {user && (
+                    <>
+                        <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
+                            <div className="flex items-center gap-2">
+                               {showBackButton && <button onClick={handleBack} className="p-2 -ml-2 text-gray-600 hover:text-orange-600"><ArrowLeft /></button>}
+                               <h1 className="text-xl font-bold font-display text-gray-900 tracking-wider">
+                                    {activeStoreId ? stores[activeStoreId] : 'SUJATA MASTANI'}
+                               </h1>
+                            </div>
+                            <div className="flex items-center space-x-3">
+                                <span className={`px-3 py-1 text-xs font-semibold rounded-full ${role === 'admin' ? 'bg-orange-100 text-orange-800' : 'bg-blue-100 text-blue-800'}`}>
+                                    {role ? role.toUpperCase() : '...'}
+                                </span>
+                                <button onClick={() => showConfirm({ title: 'Logout', message: 'Are you sure you want to log out?', onConfirm: () => signOut(auth)})} className="p-2 rounded-full bg-red-100 hover:bg-red-200 text-red-600 transition"><LogOut className="w-5 h-5" /></button>
+                            </div>
+                        </header>
+                        <main className="flex-grow pt-2 pb-24">
+                            {renderView()}
+                        </main>
+                        {activeStoreId && <NavBar currentView={view} setView={setView} role={role} />}
+                    </>
+                )}
+            </div>
         </div>
     );
 };
