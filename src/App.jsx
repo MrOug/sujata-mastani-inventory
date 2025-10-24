@@ -73,7 +73,7 @@ const getYesterdayDate = () => {
     return d.toISOString().slice(0, 10);
 };
 
-// --- Custom Components ---
+// --- Custom Components (Defined BEFORE App component) ---
 
 const StockInput = ({ label, value, onChange, placeholder = '0' }) => (
     <div className="flex items-center justify-between p-3 bg-white rounded-lg mb-2 border border-gray-100">
@@ -89,10 +89,8 @@ const StockInput = ({ label, value, onChange, placeholder = '0' }) => (
 
 const Modal = ({ title, children, onClose }) => (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-gray-900/80 p-4 backdrop-blur-sm animate-fadeIn">
-        {/* Adjusted max-w-lg and max-h for potentially longer content */}
         <div className="bg-white w-full max-w-lg rounded-xl shadow-2xl p-6 relative border border-orange-100 max-h-[90vh] overflow-y-auto">
             <h3 className="text-2xl font-bold font-display text-orange-700 border-b border-gray-200 pb-3 mb-4 sticky top-0 bg-white z-10">{title}</h3>
-            {/* Make children scrollable if needed, although the outer div handles it now */}
             <div className="modal-content">{children}</div>
             {onClose && (
                 <button onClick={onClose} className="absolute top-4 right-4 text-gray-500 hover:text-orange-600 transition-colors z-20">
@@ -109,7 +107,6 @@ const Toast = ({ message, type = 'success', onClose }) => {
     const colors = { success: 'bg-green-500', error: 'bg-red-500', warning: 'bg-yellow-500', info: 'bg-blue-500' };
     useEffect(() => { const timer = setTimeout(onClose, 4000); return () => clearTimeout(timer); }, [onClose]);
     return (
-        // Removed fixed positioning from individual toast
         <div className="animate-slideInRight">
             <div className={`${colors[type]} text-white px-6 py-4 rounded-lg shadow-2xl flex items-center gap-3 min-w-[300px] max-w-md`}>
                 <div className="flex-shrink-0 w-8 h-8 flex items-center justify-center bg-white/20 rounded-full text-xl font-bold">{icons[type]}</div>
@@ -121,7 +118,6 @@ const Toast = ({ message, type = 'success', onClose }) => {
 };
 
 const ToastContainer = ({ toasts, removeToast }) => (
-    // Container handles the fixed positioning
     <div className="fixed top-4 right-4 z-[100] flex flex-col gap-3">{toasts.map((toast) => <Toast key={toast.id} {...toast} onClose={() => removeToast(toast.id)} />)}</div>
 );
 
@@ -130,7 +126,6 @@ const ConfirmModal = ({ title, message, onConfirm, onCancel, confirmText = 'Conf
     const colorClasses = { orange: 'bg-orange-600 hover:bg-orange-700', red: 'bg-red-600 hover:bg-red-700', green: 'bg-green-600 hover:bg-green-700' };
     return (
         <Modal title={title} onClose={onCancel}>
-            {/* Added whitespace-pre-wrap to respect newlines in confirmation messages */}
             <p className="text-gray-700 mb-6 text-base leading-relaxed whitespace-pre-wrap">{message}</p>
             <div className="flex gap-3">
                 <button onClick={onCancel} className="flex-1 py-3 bg-gray-200 hover:bg-gray-300 text-gray-800 font-bold rounded-xl transition duration-150">{cancelText}</button>
@@ -568,7 +563,7 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
 
 // --- Stock Management Components ---
 
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => { 
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => {
     // ... (handleSave, handleDateChange - corrected toast logic)
      const handleSave = async () => { try { await saveStock(); showToast('Stock saved successfully!', 'success'); } catch (e) { if (e.message !== "Save cancelled by user.") { showToast(e.message || 'Error saving stock.', 'error'); } console.error("Save stock error:", e); } };
      const handleDateChange = (e) => { const newDate = e.target.value; if (newDate > getTodayDate()) { showToast('Cannot select future dates', 'warning'); return; } setSelectedDate(newDate); };
@@ -580,7 +575,7 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
             <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100"> <label className="block text-sm font-medium text-gray-700 mb-2"> Select Date </label> <input type="date" value={selectedDate} max={getTodayDate()} onChange={handleDateChange} className="w-full p-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition duration-150"/> <p className="text-xs text-gray-500 mt-1">Maximum date: Today ({getTodayDate()})</p> </div>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).sort().map(category => ( 
+                {Object.keys(masterStockList).sort().map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
@@ -601,19 +596,19 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
     );
 };
 
-const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => { 
+const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => {
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Stock Sold Report</h2>
             <div className="flex flex-col items-center justify-center rounded-xl shadow-lg bg-white border border-gray-100 p-6"> <p className="text-base font-semibold text-gray-600 font-display">TOTAL UNITS SOLD TODAY</p> <p className="text-6xl font-extrabold font-display text-orange-600 mt-1">{soldStockSummary}</p> <p className="text-xs text-gray-400 mt-2">Data as of {getTodayDate()}</p> </div> <p className="text-sm text-gray-500"> Calculation: Yesterday's Closing Stock - Today's Current Stock. </p>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).sort().map(category => ( 
+                {Object.keys(masterStockList).sort().map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-red-600 border-b border-red-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
                             {masterStockList[category]?.sort().map(item => { // Sort items
-                                const key = `${category}-${item}`; 
+                                const key = `${category}-${item}`;
                                 const sold = calculateSold(category, item);
                                 const current = currentStock[key] || 0;
                                 const yesterday = yesterdayStock[key] || 0;
@@ -631,7 +626,7 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
     );
 };
 
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }) => { 
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }) => {
     // ... (handleOutput, state - unchanged)
      const [showOutputModal, setShowOutputModal] = useState(false);
      const handleOutput = () => { const output = generateOrderOutput(); const textArea = document.createElement("textarea"); textArea.value = output; document.body.appendChild(textArea); textArea.focus(); textArea.select(); try { document.execCommand('copy'); showToast('Order list copied!', 'success'); } catch (err) { showToast('Failed to copy.', 'error'); } document.body.removeChild(textArea); setShowOutputModal(true); };
@@ -642,7 +637,7 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             <p className="text-sm text-gray-600">Enter required quantity. Current stock shown.</p>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).sort().map(category => ( 
+                {Object.keys(masterStockList).sort().map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
                         <div className="space-y-2">
@@ -663,12 +658,42 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
     );
 };
 
-// --- Auth Modal (Assume correct) ---
+// --- Auth Modal ---
 const AuthModal = ({ auth, onLoginSuccess, onClose, isFirstUser }) => {
-    // ... (Implementation unchanged)
+    // ... (Implementation unchanged - assume correct)
     const [isRegister, setIsRegister] = useState(isFirstUser); const [username, setUsername] = useState(''); const [password, setPassword] = useState(''); const [error, setError] = useState(''); const [isLoading, setIsLoading] = useState(false);
     const handleSubmit = async (e) => { e.preventDefault(); setError(''); setIsLoading(true); if (password.length < 6) { setError("Password must be >= 6 chars."); setIsLoading(false); return; } try { const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`; if (isRegister) { const uc = await createUserWithEmailAndPassword(auth, fakeEmail, password); onLoginSuccess(uc.user, username.trim()); } else { const uc = await signInWithEmailAndPassword(auth, fakeEmail, password); onLoginSuccess(uc.user, username.trim()); } } catch (err) { console.error("Auth Error:", err); setError(err.message.replace('Firebase: Error (auth/', '').replace(').', '')); } finally { setIsLoading(false); } };
     return ( <Modal title={isRegister ? "Admin Registration" : "Login"} onClose={onClose}> <p className="text-sm text-gray-600 mb-6">{isRegister ? "Register the first Super Admin." : "Enter username and password."}</p> <form onSubmit={handleSubmit} className="space-y-4"> <div className="relative"> <User className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" /> <input type="text" placeholder="Username" value={username} onChange={(e) => setUsername(e.target.value)} required className="w-full p-3 h-12 border border-gray-300 rounded-lg pl-10 focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150"/> </div> <div className="relative"> <List className="absolute left-3 top-1/2 -translate-y-1/2 text-gray-400 w-5 h-5" /> <input type="password" placeholder="Password (Min 6 chars)" value={password} onChange={(e) => setPassword(e.target.value)} required minLength="6" className="w-full p-3 h-12 border border-gray-300 rounded-lg pl-10 focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150"/> </div> {error && <p className="text-red-500 text-sm p-2 bg-red-50 rounded-lg">{error}</p>} <button type="submit" disabled={isLoading} className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg shadow-orange-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg font-display"> {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : (isRegister ? "Register Admin" : "Log In")} </button> </form> <button onClick={() => { setIsRegister(p => !p); setError(''); }} className="w-full mt-4 text-sm text-orange-600 hover:text-orange-700 font-medium" disabled={isLoading}> {isRegister ? "Already have account? Log In" : "Register first Admin? Sign Up"} </button> </Modal> );
+};
+
+// --- Error Display ---
+const ErrorDisplay = ({ error, onRetry, onDismiss }) => ( <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"> <div className="w-full max-w-md"> <div className="bg-white rounded-xl shadow-xl border-t-4 border-red-500 p-6 text-center"> <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 mx-auto mb-4"><X className="w-8 h-8" /></div> <h2 className="text-xl font-bold text-gray-900 mb-2">Error Occurred</h2> <p className="text-gray-600 mb-4">{error.message}</p> <div className="text-xs text-gray-500 mb-4"><p>Context: {error.context}</p><p>Time: {new Date(error.timestamp).toLocaleString()}</p></div> <div className="flex gap-3"> {error.retryable && (<button onClick={onRetry} className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Reload App</button>)} <button onClick={onDismiss} className="flex-1 bg-gray-500 hover:bg-gray-600 text-white font-bold py-2 px-4 rounded-lg transition duration-150">Dismiss</button> </div> </div> </div> </div> );
+
+// --- Process Flow Display ---
+const ProcessFlowDisplay = ({ step }) => { const steps = { initializing: { text: 'Initializing...', color: 'blue' }, authenticating: { text: 'Login required', color: 'orange' }, 'loading-data': { text: 'Loading data...', color: 'yellow' }, ready: { text: 'Ready', color: 'green' }, error: { text: 'Error', color: 'red' } }; const currentStep = steps[step] || steps.initializing; return ( <div className="fixed top-4 left-4 bg-white rounded-lg shadow p-2 z-50 text-xs flex items-center gap-2"> <div className={`w-2 h-2 rounded-full bg-${currentStep.color}-500`}></div> <span className="font-medium text-gray-700">{currentStep.text}</span> </div> ); };
+
+// --- Home/Selector View ---
+const HomeView = ({ role, userStoreId, stores, setView, setSelectedStoreId, userId }) => (
+    <div className="p-4 space-y-6">
+         <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-lg border border-gray-100"> <h2 className="text-3xl font-bold font-display text-orange-600 mb-1">Sujata Mastani</h2> <p className="text-gray-600 text-sm">Logged in as {role.toUpperCase()}. Select outlet.</p> </div>
+        <div className="space-y-4">
+            {Object.keys(stores).length > 0 ? ( Object.entries(stores).sort(([, nameA], [, nameB]) => nameA.localeCompare(nameB)).map(([id, name]) => { const isAssignedToStore = role === 'admin' || userStoreId === id; if (role === 'staff' && userStoreId !== id) return null; return ( <div key={id} className={`bg-white rounded-xl p-4 shadow-lg transition-shadow hover:shadow-xl border-l-4 ${ isAssignedToStore ? 'border-orange-600' : 'border-gray-300 opacity-80' }`}> <div className="flex items-center gap-3"> <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600"> <Home className="w-5 h-5" /> </div> <div className="flex-1"> <p className="font-display text-lg font-bold text-gray-900">{name}</p> {role === 'staff' && <span className="text-xs font-semibold text-green-600">Your Store</span>} </div> </div> <div className="border-t border-gray-200 mt-3 pt-3"> <div className="flex flex-wrap gap-3"> <button onClick={() => { setSelectedStoreId(id); setView('entry'); }} className="flex flex-1 items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700 min-w-[120px]"> <List className="w-4 h-4 mr-2" /> Stock Entry </button> {role === 'admin' && ( <button onClick={() => { setSelectedStoreId(id); setView('admin'); }} className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50 min-w-[120px]"> <User className="w-4 h-4 mr-2" /> Admin </button> )} </div> </div> </div> ); }) ) : ( <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 text-center"> <div className="flex flex-col items-center gap-4"> <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600"><Store className="w-8 h-8" /></div> <div> <h3 className="font-display text-xl font-bold text-gray-900 mb-2">No Stores Found</h3> <p className="text-gray-600 mb-4"> {role === 'admin' ? 'Create first store via Store Manager.' : 'Contact admin.'} </p> {role === 'admin' && ( <button onClick={() => setView('storemanager')} className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md flex items-center justify-center mx-auto"> <Store className="w-5 h-5 mr-2" /> Create Store </button> )} </div> </div> </div> )}
+        </div>
+        <p className="text-xs text-gray-500 pt-4 border-t border-gray-200 mt-4">User ID: {userId || 'N/A'}</p>
+    </div>
+);
+
+ // --- Admin Functions View ---
+const AdminFunctionsView = ({ stores, selectedStoreId, setView }) => {
+    const storeName = stores[selectedStoreId] || 'Selected Store';
+    const AdminButton = ({ icon: Icon, label, viewName }) => ( <button onClick={() => setView(viewName)} className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl border-l-4 border-orange-600 text-center w-full"> <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 mb-3"><Icon className="w-6 h-6" /></div> <p className="font-display text-lg font-bold text-gray-900">{label}</p> </button> );
+    return ( <div className="p-4 space-y-6"> <div className="text-center p-4 bg-white rounded-xl shadow-lg border-b-4 border-orange-600"> <h2 className="text-2xl font-bold font-display text-gray-900">Admin Functions</h2> <p className="text-gray-600 text-sm">for {storeName}</p> </div> <div className="grid grid-cols-2 gap-4"> <AdminButton icon={ShoppingCart} label="Order" viewName="order" /> <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" /> <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" /> <AdminButton icon={Store} label="Store Manager" viewName="storemanager" /> <AdminButton icon={Package} label="Item Manager" viewName="itemmanager" /> </div> </div> );
+};
+
+ // --- Navigation Bar ---
+const NavBar = ({ currentView, role, selectedStoreId, setView, setSelectedStoreId }) => {
+    const NavButton = ({ icon: Icon, label, active, onClick, disabled }) => ( <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center p-1 transition duration-200 flex-1 ${ active ? 'text-orange-600 font-bold' : 'text-gray-500 hover:text-orange-500' } ${disabled ? 'opacity-50' : ''}`}> <Icon className="w-6 h-6" /> <span className="text-[10px] mt-0.5">{label}</span> </button> );
+    return ( <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] border-t border-gray-200"> <nav className="flex justify-around items-center h-16 max-w-lg mx-auto"> <NavButton icon={Home} label="Home" active={currentView === 'home'} onClick={() => { setView('home'); setSelectedStoreId(''); }} /> {selectedStoreId && <NavButton icon={List} label="Entry" active={currentView === 'entry'} onClick={() => setView('entry')} />} {role === 'admin' && ( <> <NavButton icon={Store} label="Stores" active={currentView === 'storemanager'} onClick={() => setView('storemanager')} /> <NavButton icon={UserPlus} label="Users" active={currentView === 'usermanager'} onClick={() => setView('usermanager')} /> <NavButton icon={Package} label="Items" active={currentView === 'itemmanager'} onClick={() => setView('itemmanager')} /> {selectedStoreId && ( <> <NavButton icon={TrendingDown} label="Sold" active={currentView === 'sold'} onClick={() => setView('sold')} /> <NavButton icon={ShoppingCart} label="Order" active={currentView === 'order'} onClick={() => setView('order')} /> </> )} </> )} </nav> </div> );
 };
 
 // --- Main Application Component ---
@@ -693,23 +718,24 @@ const App = () => {
     const [error, setError] = useState(null);
     const [processStep, setProcessStep] = useState('initializing');
     const [storesLoaded, setStoresLoaded] = useState(false);
-    const [masterStockListLoaded, setMasterStockListLoaded] = useState(false); // NEW
+    const [masterStockListLoaded, setMasterStockListLoaded] = useState(false);
     const [isInitializing, setIsInitializing] = useState(true);
     const [isOnline, setIsOnline] = useState(navigator.onLine);
     const [currentStock, setCurrentStock] = useState({});
     const [yesterdayStock, setYesterdayStock] = useState({});
     const [orderQuantities, setOrderQuantities] = useState({});
     const [selectedDate, setSelectedDate] = useState(getTodayDate());
-    const [masterStockList, setMasterStockList] = useState({}); // NEW
+    const [masterStockList, setMasterStockList] = useState({});
 
     // --- Error Handling ---
-    const handleError = (error, context = 'Unknown') => { console.error(`Error in ${context}:`, error); setError({ message: error.message || 'An unexpected error occurred', context, timestamp: new Date().toISOString(), retryable: !['permission-denied', 'unauthenticated', 'invalid-argument'].includes(error.code) }); setProcessStep('error'); };
-    const clearError = () => { setError(null); /* Reset process step? Maybe back to ready? */ if (userId && storesLoaded && masterStockListLoaded) setProcessStep('ready'); };
+    const handleError = (error, context = 'Unknown') => { console.error(`Error in ${context}:`, error); setError({ message: error.message || 'An unexpected error occurred', context, timestamp: new Date().toISOString(), retryable: !['permission-denied', 'unauthenticated', 'invalid-argument'].includes(error?.code) }); setProcessStep('error'); };
+    const clearError = () => { setError(null); if (userId && storesLoaded && masterStockListLoaded) setProcessStep('ready'); };
 
     // --- Effects (Initialization, Auth, Listeners) ---
 
     // 1. Firebase Initialization & Auth Listener
     useEffect(() => {
+        let unsubscribeAuth = () => {}; // Initialize with empty function
         const initializeFirebase = async () => {
              try {
                 setProcessStep('initializing');
@@ -723,9 +749,9 @@ const App = () => {
                 const isFirstRun = !setupDocSnap.exists();
                 setIsFirstUser(isFirstRun); console.log("Is this the first user signup?", isFirstRun);
 
-                const fetchUserProfile = async (user, username = null) => { try { if (!user || user.isAnonymous) { setRole(null); setUserStoreId(null); return; } setUserId(user.uid); const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile'); const roleSnap = await getDoc(roleDocRef); if (roleSnap.exists()) { setRole(roleSnap.data().role); setUserStoreId(roleSnap.data().storeId || null); } else if (isFirstRun) { const defaultRole = 'admin'; await setDoc(roleDocRef, { role: defaultRole, username: username || user.email?.split('@')[0] || 'admin_user' }, { merge: true }); setRole(defaultRole); setUserStoreId(null); } else { console.warn("User profile not found, might need admin creation."); setRole(null); /* Or handle appropriately */ } } catch (error) { handleError(error, 'User Profile Fetch'); } };
+                const fetchUserProfile = async (user, username = null) => { try { if (!user || user.isAnonymous) { setRole(null); setUserStoreId(null); return; } setUserId(user.uid); const roleDocRef = doc(firestore, `artifacts/${appId}/users/${user.uid}/user_config`, 'profile'); const roleSnap = await getDoc(roleDocRef); if (roleSnap.exists()) { setRole(roleSnap.data().role); setUserStoreId(roleSnap.data().storeId || null); } else if (isFirstRun) { const defaultRole = 'admin'; await setDoc(roleDocRef, { role: defaultRole, username: username || user.email?.split('@')[0] || 'admin_user' }, { merge: true }); setRole(defaultRole); setUserStoreId(null); } else { console.warn("User profile not found, might need admin creation."); setRole(null); } } catch (error) { handleError(error, 'User Profile Fetch'); } };
                 
-                const unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
+                unsubscribeAuth = onAuthStateChanged(authentication, async (user) => {
                     try {
                         if (!user) {
                            setUserId(null); setRole(null); setUserStoreId(null); setShowAuthModal(true); setProcessStep('authenticating'); setIsAuthReady(true); return;
@@ -735,11 +761,11 @@ const App = () => {
                         // Don't set ready yet, wait for stores and list
                     } catch (error) { handleError(error, 'Auth State Change'); }
                 });
-                return () => unsubscribeAuth();
             } catch (error) { handleError(error, 'Firebase Init'); }
         };
         initializeFirebase();
-    }, [appId]); // Added appId as dependency
+        return () => unsubscribeAuth(); // Cleanup listener on unmount
+    }, [appId]);
 
     // 2. Network Status Listener
     useEffect(() => { const handleOnline = () => setIsOnline(true); const handleOffline = () => setIsOnline(false); window.addEventListener('online', handleOnline); window.addEventListener('offline', handleOffline); return () => { window.removeEventListener('online', handleOnline); window.removeEventListener('offline', handleOffline); }; }, []);
@@ -750,7 +776,7 @@ const App = () => {
         const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
         const unsubscribeStores = onSnapshot(storesColRef, (snapshot) => { const newStores = {}; snapshot.forEach(doc => { newStores[doc.id] = doc.data().name; }); setStores(newStores); setStoresLoaded(true); console.log("Stores loaded:", Object.keys(newStores).length); if (masterStockListLoaded) setProcessStep('ready'); clearError(); }, (error) => { handleError(error, 'Store Fetch'); setStores({}); setStoresLoaded(true); });
         return () => unsubscribeStores();
-    }, [db, appId, isAuthReady, userId, role, masterStockListLoaded]); // Added masterStockListLoaded
+    }, [db, appId, isAuthReady, userId, role, masterStockListLoaded]);
 
     // 4. Fetch Master Stock List from Firestore
     useEffect(() => {
@@ -765,18 +791,17 @@ const App = () => {
                 else { console.warn("Fetched master list empty/invalid."); needsUpdate = true; }
             } else { console.log("Master list doc not found."); }
             setMasterStockList(listToUse); 
-            // Reset stocks based on the definitive list (fetched or default)
             setCurrentStock(getEmptyStock(listToUse)); setYesterdayStock(getEmptyStock(listToUse)); setOrderQuantities(getEmptyStock(listToUse)); 
             setMasterStockListLoaded(true); 
             console.log("Master list loaded.");
-            if (storesLoaded) setProcessStep('ready'); // Set ready if stores are also loaded
+            if (storesLoaded) setProcessStep('ready'); 
             clearError();
             if (needsUpdate && role === 'admin') { setDoc(listDocRef, { list: DEFAULT_STOCK_LIST_STRUCTURE }).catch(err => console.error("Failed to create default list:", err)); }
         }, (error) => {
             handleError(error, 'Master List Fetch'); console.warn("Error fetching master list, using default."); const defaultList = DEFAULT_STOCK_LIST_STRUCTURE; setMasterStockList(defaultList); setCurrentStock(getEmptyStock(defaultList)); setYesterdayStock(getEmptyStock(defaultList)); setOrderQuantities(getEmptyStock(defaultList)); setMasterStockListLoaded(true); if (storesLoaded) setProcessStep('ready'); 
         });
         return () => unsubscribeList();
-    }, [db, appId, isAuthReady, userId, role, storesLoaded]); // Added storesLoaded
+    }, [db, appId, isAuthReady, userId, role, storesLoaded]);
 
     // 5. Set default admin storeId 
     useEffect(() => {
@@ -790,11 +815,11 @@ const App = () => {
     // 6. Update user's store if assigned store is deleted/invalid
     useEffect(() => {
         if (db && auth && userId && storesLoaded && Object.keys(stores).length > 0 && userStoreId && !stores[userStoreId]) {
-            const newStoreId = Object.keys(stores)[0]; // Assign the first available store
+            const newStoreId = Object.keys(stores)[0]; 
             const roleDocRef = doc(db, `artifacts/${appId}/users/${userId}/user_config`, 'profile');
             updateDoc(roleDocRef, { storeId: newStoreId }).then(() => setUserStoreId(newStoreId)).catch(err => handleError(err, 'Store Reassignment'));
         }
-    }, [stores, storesLoaded, db, auth, userId, appId, role, userStoreId]); // Added userStoreId dependency
+    }, [stores, storesLoaded, db, auth, userId, appId, role, userStoreId]);
 
     // 7. Fetch Stock Data based on selected store and date
      const fetchStockData = useCallback(async (storeIdToFetch, dateToFetch) => { 
@@ -811,20 +836,19 @@ const App = () => {
             const todayData = todaySnap.exists() ? todaySnap.data().stock : {};
             const yesterdayData = yesterdaySnap.exists() ? yesterdaySnap.data().stock : {};
             
-            // IMPORTANT: Initialize with empty structure FIRST, then merge fetched data
             setCurrentStock({ ...emptyStock, ...todayData });
-            setOrderQuantities({ ...emptyStock, ...todayData }); // Start order qtys based on current stock for the selected date
+            setOrderQuantities({ ...emptyStock, ...todayData }); 
             setYesterdayStock({ ...emptyStock, ...yesterdayData });
             
         } catch (e) { handleError(e, "Stock Data Fetch"); setCurrentStock(emptyStock); setYesterdayStock(emptyStock); setOrderQuantities(emptyStock); } 
         finally { setLoadingData(false); }
-    }, [db, appId, masterStockList, masterStockListLoaded]); // Depend on masterStockList
+    }, [db, appId, masterStockList, masterStockListLoaded]); 
 
     // Re-fetch when store OR date changes OR master list loads/changes
     useEffect(() => {
         if (db && userId && selectedStoreId && selectedDate && masterStockListLoaded) { 
             fetchStockData(selectedStoreId, selectedDate);
-        } else if (masterStockListLoaded) { // If store/date invalid, reset based on master list
+        } else if (masterStockListLoaded) { 
              const emptyStock = getEmptyStock(masterStockList); setCurrentStock(emptyStock); setYesterdayStock(emptyStock); setOrderQuantities(emptyStock);
          }
     }, [db, userId, selectedStoreId, selectedDate, fetchStockData, masterStockListLoaded, masterStockList]); 
@@ -832,11 +856,10 @@ const App = () => {
     // 8. Staff Store Enforcement 
     useEffect(() => {
         if (role === 'staff' && storesLoaded && userStoreId && selectedStoreId !== userStoreId) {
-            setSelectedStoreId(userStoreId); // Automatically select staff's assigned store
+            setSelectedStoreId(userStoreId); 
         }
-         // Redirect staff if they try to access a view meant for a different store
          if (role === 'staff' && selectedStoreId && userStoreId && selectedStoreId !== userStoreId && view !== 'home') {
-             setSelectedStoreId(userStoreId); setView('entry'); // Force back to their store's entry view
+             setSelectedStoreId(userStoreId); setView('entry'); 
          }
     }, [role, selectedStoreId, userStoreId, view, storesLoaded]);
 
@@ -844,7 +867,7 @@ const App = () => {
     // --- Core Functions ---
 
     const calculateSold = useCallback((category, item) => { const key = `${category}-${item}`; return (yesterdayStock[key] || 0) - (currentStock[key] || 0); }, [currentStock, yesterdayStock]);
-    const soldStockSummary = useMemo(() => { let totalSold = 0; Object.keys(currentStock).forEach(key => { const [category, item] = key.split('-'); if (category && item && masterStockList[category]?.includes(item)) { const sold = calculateSold(category, item); if (sold > 0) totalSold += sold; } }); return totalSold; }, [currentStock, calculateSold, masterStockList]); 
+    const soldStockSummary = useMemo(() => { let totalSold = 0; Object.keys(currentStock).forEach(key => { const [category, item] = key.split('-'); if (category && item && masterStockList[category]?.includes(item)) { const sold = calculateSold(category, item); if (sold > 0) totalSold += sold; } }); return Math.round(totalSold * 100) / 100; }, [currentStock, calculateSold, masterStockList]); // Round to 2 decimal places
 
     const saveStock = async () => {
         setIsSaving(true); 
@@ -866,8 +889,17 @@ const App = () => {
                 await retryOperation(async () => { await setDoc(docRef, { storeId: selectedStoreId, date: selectedDate, stock: sanitized, userId: userId, timestamp: new Date().toISOString() }); });
                 storageBackup.save(`stock_${selectedStoreId}_${selectedDate}`, sanitized);
             });
-        } catch (error) { handleError(error, 'Stock Saving'); throw error; } // Re-throw needed for caller toast
-        finally { setIsSaving(false); }
+             // Explicitly call fetchStockData after successful save to refresh sold report etc.
+            await fetchStockData(selectedStoreId, selectedDate); 
+        } catch (error) { 
+            // Only handle error if it's not a user cancellation
+            if (error.message !== "Save cancelled by user.") {
+                handleError(error, 'Stock Saving'); 
+                throw error; // Re-throw needed for caller toast
+            } else {
+                 console.log("Save cancelled by user."); // Log cancellation but don't show error toast
+            }
+        } finally { setIsSaving(false); }
     };
 
      const exportStockData = useCallback(() => {
@@ -875,7 +907,6 @@ const App = () => {
          try {
              const storeName = stores[selectedStoreId] || selectedStoreId;
              const exportData = { store: storeName, date: selectedDate, exportTimestamp: new Date().toISOString(), currentStock: {}, yesterdayStock: {}, calculatedSold: {} };
-             // Use master list to structure the export
              Object.keys(masterStockList).sort().forEach(category => {
                  masterStockList[category].sort().forEach(item => {
                      const key = `${category}-${item}`;
@@ -893,19 +924,20 @@ const App = () => {
 
     const generateOrderOutput = useCallback(() => {
         const storeName = stores[selectedStoreId] || selectedStoreId;
-        let output = `${storeName}\n\n`;
+        let output = `${storeName}\nDate: ${getTodayDate()}\n\n`; // Add date to order output
         const sections = {};
-        const miscItems = []; // Keep specific logic if needed
+        const miscItems = []; 
         const nonOrderedItems = [];
 
-        Object.keys(masterStockList).sort().forEach(category => { sections[category] = []; }); // Init sections based on master list
+        Object.keys(masterStockList).sort().forEach(category => { sections[category] = []; }); 
 
         Object.keys(masterStockList).forEach(category => {
-            masterStockList[category]?.sort().forEach(item => { // Iterate sorted items
+            masterStockList[category]?.sort().forEach(item => { 
                 const key = `${category}-${item}`; 
                 const quantity = orderQuantities[key] || ''; 
-                if (quantity !== 0 && quantity !== '') {
-                    if (category === 'MISC' && item === 'Ice Cream Dabee') { // Example specific logic
+                // Only include if quantity is a positive number
+                if (typeof quantity === 'number' && quantity > 0) { 
+                    if (category === 'MISC' && item === 'Ice Cream Dabee') { 
                         miscItems.push(`${item} - ${quantity}`);
                     } else if (sections[category]) { 
                         sections[category].push(`${item} - ${quantity}`);
@@ -916,17 +948,17 @@ const App = () => {
             });
         });
 
-        // Output sections dynamically and sorted
         Object.keys(sections).sort().forEach(category => {
             if (sections[category].length > 0) {
                  output += `*${category}*\n`;
-                 output += sections[category].join('\n'); // Items are already sorted
+                 output += sections[category].join('\n'); 
                  output += '\n\n';
             }
         });
         
         if (miscItems.length > 0) { output += miscItems.join('\n'); output += '\n\n'; }
-        if (nonOrderedItems.length > 0) { output += `*ITEMS NOT ORDERED*\n`; output += nonOrderedItems.join('\n'); output += '\n\n'; }
+        // Optional: Include non-ordered items if needed
+        // if (nonOrderedItems.length > 0) { output += `*ITEMS NOT ORDERED*\n`; output += nonOrderedItems.join('\n'); output += '\n\n'; }
         if (selectedStoreId === 'store-1' && stores['store-2']) { output += stores['store-2']; output += '\n'; } 
 
         return output.trim();
@@ -939,59 +971,35 @@ const App = () => {
     const removeToast = useCallback((id) => { setToasts(prev => prev.filter(toast => toast.id !== id)); }, []);
     const showConfirm = useCallback((options) => new Promise((resolve) => { setConfirmDialog({ ...options, onConfirm: () => { setConfirmDialog(null); resolve(true); }, onCancel: () => { setConfirmDialog(null); resolve(false); } }); }), []);
 
-    // --- Error Display ---
-    const ErrorDisplay = ({ error, onRetry, onDismiss }) => ( <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"> <div className="w-full max-w-md"> <div className="bg-white rounded-xl shadow-xl border-t-4 border-red-500 p-6 text-center"> <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-red-100 text-red-600 mx-auto mb-4"><X className="w-8 h-8" /></div> <h2 className="text-xl font-bold text-gray-900 mb-2">Error Occurred</h2> <p className="text-gray-600 mb-4">{error.message}</p> <div className="text-xs text-gray-500 mb-4"><p>Context: {error.context}</p><p>Time: {new Date(error.timestamp).toLocaleString()}</p></div> <div className="flex gap-3"> {error.retryable && (<button onClick={onRetry} className="...">Reload App</button>)} <button onClick={onDismiss} className="...">Dismiss</button> </div> </div> </div> </div> );
-    const ProcessFlowDisplay = ({ step }) => { const steps = { initializing: { text: 'Initializing...', color: 'blue' }, authenticating: { text: 'Login required', color: 'orange' }, 'loading-data': { text: 'Loading data...', color: 'yellow' }, ready: { text: 'Ready', color: 'green' }, error: { text: 'Error', color: 'red' } }; const currentStep = steps[step] || steps.initializing; return ( <div className="fixed top-4 left-4 bg-white rounded-lg shadow p-2 z-50 text-xs flex items-center gap-2"> <div className={`w-2 h-2 rounded-full bg-${currentStep.color}-500`}></div> <span className="font-medium text-gray-700">{currentStep.text}</span> </div> ); };
-
-
     // --- View Rendering Logic ---
 
     if (error) { return <ErrorDisplay error={error} onRetry={() => window.location.reload()} onDismiss={clearError} />; }
-    if (!isAuthReady || isInitializing || processStep !== 'ready') { return <LoadingSpinner text={processStep === 'loading-data' ? "Loading configuration..." : "Initializing..."} />; }
+    // Update loading condition to check for master list readiness as well
+    if (!isAuthReady || isInitializing || !storesLoaded || !masterStockListLoaded || processStep !== 'ready') { return <LoadingSpinner text={processStep === 'loading-data' ? "Loading configuration..." : "Initializing..."} />; }
     if (!userId || !role) { return ( <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4"> <div className="w-full max-w-md"> <div className="bg-white rounded-xl shadow-xl border-t-4 border-orange-600 p-6 text-center"> <h1 className="text-3xl font-bold font-display text-orange-600 mb-2">Sujata Mastani</h1> <p className="text-gray-600 mb-6">Inventory System</p> <button onClick={() => setShowAuthModal(true)} className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition duration-150 shadow-md flex items-center justify-center text-lg font-display"> <User className="w-5 h-5 mr-2" /> Log In / Register </button> </div> </div> {showAuthModal && <AuthModal auth={auth} onClose={() => setShowAuthModal(false)} onLoginSuccess={handleAuthSuccess} isFirstUser={isFirstUser} />} </div> ); }
     if (loadingData && selectedStoreId) { return <LoadingSpinner text="Loading stock data..." />; } 
 
-    // --- Main Views ---
-    const HomeView = () => (
-         <div className="p-4 space-y-6">
-              <div className="flex flex-col items-center text-center p-6 bg-white rounded-xl shadow-lg border border-gray-100"> <h2 className="text-3xl font-bold font-display text-orange-600 mb-1">Sujata Mastani</h2> <p className="text-gray-600 text-sm">Logged in as {role.toUpperCase()}. Select outlet.</p> </div>
-             <div className="space-y-4">
-                 {Object.keys(stores).length > 0 ? ( Object.entries(stores).sort(([, nameA], [, nameB]) => nameA.localeCompare(nameB)).map(([id, name]) => { const isAssignedToStore = role === 'admin' || userStoreId === id; if (role === 'staff' && userStoreId !== id) return null; return ( <div key={id} className={`bg-white rounded-xl p-4 shadow-lg transition-shadow hover:shadow-xl border-l-4 ${ isAssignedToStore ? 'border-orange-600' : 'border-gray-300 opacity-80' }`}> <div className="flex items-center gap-3"> <div className="flex size-10 shrink-0 items-center justify-center rounded-lg bg-orange-100 text-orange-600"> <Home className="w-5 h-5" /> </div> <div className="flex-1"> <p className="font-display text-lg font-bold text-gray-900">{name}</p> {role === 'staff' && <span className="text-xs font-semibold text-green-600">Your Store</span>} </div> </div> <div className="border-t border-gray-200 mt-3 pt-3"> <div className="flex flex-wrap gap-3"> <button onClick={() => { setSelectedStoreId(id); setView('entry'); }} className="flex flex-1 items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700 min-w-[120px]"> <List className="w-4 h-4 mr-2" /> Stock Entry </button> {role === 'admin' && ( <button onClick={() => { setSelectedStoreId(id); setView('admin'); }} className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50 min-w-[120px]"> <User className="w-4 h-4 mr-2" /> Admin </button> )} </div> </div> </div> ); }) ) : ( <div className="bg-white rounded-xl shadow-lg border border-gray-200 p-6 text-center"> <div className="flex flex-col items-center gap-4"> <div className="flex size-16 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600"><Store className="w-8 h-8" /></div> <div> <h3 className="font-display text-xl font-bold text-gray-900 mb-2">No Stores Found</h3> <p className="text-gray-600 mb-4"> {role === 'admin' ? 'Create first store via Store Manager.' : 'Contact admin.'} </p> {role === 'admin' && ( <button onClick={() => setView('storemanager')} className="bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 px-6 rounded-lg transition duration-150 shadow-md flex items-center justify-center mx-auto"> <Store className="w-5 h-5 mr-2" /> Create Store </button> )} </div> </div> </div> )}
-             </div>
-             <p className="text-xs text-gray-500 pt-4 border-t border-gray-200 mt-4">User ID: {userId || 'N/A'}</p>
-         </div>
-     );
-
-     const AdminFunctionsView = () => {
-         const storeName = stores[selectedStoreId] || 'Selected Store';
-         const AdminButton = ({ icon: Icon, label, viewName }) => ( <button onClick={() => setView(viewName)} className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl border-l-4 border-orange-600 text-center w-full"> <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 mb-3"><Icon className="w-6 h-6" /></div> <p className="font-display text-lg font-bold text-gray-900">{label}</p> </button> );
-         return ( <div className="p-4 space-y-6"> <div className="text-center p-4 bg-white rounded-xl shadow-lg border-b-4 border-orange-600"> <h2 className="text-2xl font-bold font-display text-gray-900">Admin Functions</h2> <p className="text-gray-600 text-sm">for {storeName}</p> </div> <div className="grid grid-cols-2 gap-4"> <AdminButton icon={ShoppingCart} label="Order" viewName="order" /> <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" /> <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" /> <AdminButton icon={Store} label="Store Manager" viewName="storemanager" /> <AdminButton icon={Package} label="Item Manager" viewName="itemmanager" /> </div> </div> );
-     };
-
-     const NavBar = ({ currentView }) => {
-         const NavButton = ({ icon: Icon, label, active, onClick, disabled }) => ( <button onClick={onClick} disabled={disabled} className={`flex flex-col items-center p-1 transition duration-200 flex-1 ${ active ? 'text-orange-600 font-bold' : 'text-gray-500 hover:text-orange-500' } ${disabled ? 'opacity-50' : ''}`}> <Icon className="w-6 h-6" /> <span className="text-[10px] mt-0.5">{label}</span> </button> ); // Smaller text size
-         return ( <div className="fixed bottom-0 left-0 right-0 bg-white shadow-[0_-2px_10px_rgba(0,0,0,0.1)] border-t border-gray-200"> <nav className="flex justify-around items-center h-16 max-w-lg mx-auto"> <NavButton icon={Home} label="Home" active={currentView === 'home'} onClick={() => { setView('home'); setSelectedStoreId(''); }} /> {selectedStoreId && <NavButton icon={List} label="Entry" active={currentView === 'entry'} onClick={() => setView('entry')} />} {role === 'admin' && ( <> <NavButton icon={Store} label="Stores" active={currentView === 'storemanager'} onClick={() => setView('storemanager')} /> <NavButton icon={UserPlus} label="Users" active={currentView === 'usermanager'} onClick={() => setView('usermanager')} /> <NavButton icon={Package} label="Items" active={currentView === 'itemmanager'} onClick={() => setView('itemmanager')} /> {selectedStoreId && ( <> <NavButton icon={TrendingDown} label="Sold" active={currentView === 'sold'} onClick={() => setView('sold')} /> <NavButton icon={ShoppingCart} label="Order" active={currentView === 'order'} onClick={() => setView('order')} /> </> )} </> )} </nav> </div> );
-     };
-    
+    // --- Main Renderer ---
     const renderView = () => {
         const storeName = stores[selectedStoreId] || 'Unknown Store';
         const isAdmin = role === 'admin';
         switch (view) {
-            case 'home': return <HomeView />;
-            case 'admin': if (!isAdmin || !selectedStoreId) return <HomeView />; return <AdminFunctionsView />; // Require selectedStoreId for Admin view now
-            case 'storemanager': if (!isAdmin) return <HomeView />; return <StoreManagementView {...{ db, appId, stores, showToast, showConfirm }} />;
-            case 'usermanager': if (!isAdmin) return <HomeView />; return <AdminUserManagementView {...{ db, appId, stores, auth, exportStockData, showToast }} />;
-            case 'itemmanager': if (!isAdmin) return <HomeView />; return <ItemManagerView {...{ db, appId, masterStockList, showToast, showConfirm }} />; // Pass setMasterStockList removed, handled by snapshot 
-            case 'entry': if (!selectedStoreId) return <HomeView />; return <StockEntryView {...{ storeId: storeName, stockData: currentStock, setStockData: setCurrentStock, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }} />;
-            case 'sold': if (!isAdmin || !selectedStoreId) return <HomeView />; return <StockSoldView {...{ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }} />;
-            case 'order': if (!isAdmin || !selectedStoreId) return <HomeView />; return <OrderingView {...{ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }} />;
-            default: return <HomeView />;
+            case 'home': return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />;
+            case 'admin': if (!isAdmin || !selectedStoreId) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <AdminFunctionsView {...{ stores, selectedStoreId, setView }} />; 
+            case 'storemanager': if (!isAdmin) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <StoreManagementView {...{ db, appId, stores, showToast, showConfirm }} />;
+            case 'usermanager': if (!isAdmin) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <AdminUserManagementView {...{ db, appId, stores, auth, exportStockData, showToast }} />;
+            case 'itemmanager': if (!isAdmin) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <ItemManagerView {...{ db, appId, masterStockList, showToast, showConfirm }} />; 
+            case 'entry': if (!selectedStoreId) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <StockEntryView {...{ storeId: storeName, stockData: currentStock, setStockData: setCurrentStock, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }} />;
+            case 'sold': if (!isAdmin || !selectedStoreId) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <StockSoldView {...{ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }} />;
+            case 'order': if (!isAdmin || !selectedStoreId) return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />; return <OrderingView {...{ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }} />;
+            default: return <HomeView {...{ role, userStoreId, stores, setView, setSelectedStoreId, userId }} />;
         }
     };
 
     return (
         <div className="min-h-screen bg-gray-50 text-gray-900 font-sans antialiased pb-20">
-             {(processStep !== 'ready' || error) && <ProcessFlowDisplay step={processStep} />}
+             {/* Show process flow only during loading stages */}
+             {(processStep !== 'ready' && !error) && <ProcessFlowDisplay step={processStep} />}
              <ToastContainer toasts={toasts} removeToast={removeToast} />
              {confirmDialog && <ConfirmModal {...confirmDialog} />}
              {!isOnline && ( <div className="fixed top-0 left-0 right-0 bg-red-600 text-white text-center py-2 z-50"> <span className="text-sm font-medium">⚠️ Offline</span> </div> )}
@@ -1002,7 +1010,7 @@ const App = () => {
                 {renderView()}
             </main>
 
-            {auth?.currentUser?.uid && <NavBar currentView={view} />}
+            {auth?.currentUser?.uid && <NavBar {...{currentView: view, role, selectedStoreId, setView, setSelectedStoreId}} />}
         </div>
     );
 };
