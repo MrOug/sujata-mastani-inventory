@@ -18,7 +18,9 @@ import { perfMonitor, getMemoryInfo, getNetworkSpeed } from './utils/performance
 
 // These global variables are provided by the canvas environment
 const appId = typeof __app_id !== 'undefined' ? __app_id : 'sujata-mastani-inventory';
-const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__firebase_config) : {
+
+// Default Firebase configuration
+const defaultFirebaseConfig = {
     apiKey: "AIzaSyDZt6n1QSGLq_PyLDYQlayFwMK0Qv7gpmE",
     authDomain: "sujata-inventory.firebaseapp.com",
     projectId: "sujata-inventory",
@@ -27,6 +29,39 @@ const firebaseConfig = typeof __firebase_config !== 'undefined' ? JSON.parse(__f
     appId: "1:527916478889:web:7043c7d45087ee452bd4b8",
     measurementId: "G-BC3JXRWDVH"
 };
+
+// Parse and validate Firebase config
+let firebaseConfig = defaultFirebaseConfig;
+try {
+    if (typeof __firebase_config !== 'undefined' && __firebase_config) {
+        const parsedConfig = JSON.parse(__firebase_config);
+        // Ensure all required fields are present
+        firebaseConfig = {
+            apiKey: parsedConfig.apiKey || defaultFirebaseConfig.apiKey,
+            authDomain: parsedConfig.authDomain || defaultFirebaseConfig.authDomain,
+            projectId: parsedConfig.projectId || defaultFirebaseConfig.projectId,
+            storageBucket: parsedConfig.storageBucket || defaultFirebaseConfig.storageBucket,
+            messagingSenderId: parsedConfig.messagingSenderId || defaultFirebaseConfig.messagingSenderId,
+            appId: parsedConfig.appId || defaultFirebaseConfig.appId,
+            measurementId: parsedConfig.measurementId || defaultFirebaseConfig.measurementId
+        };
+    }
+} catch (error) {
+    console.warn('Failed to parse __firebase_config, using default config:', error);
+}
+
+// Validate Firebase config before use
+if (!firebaseConfig.projectId || !firebaseConfig.apiKey || !firebaseConfig.appId) {
+    console.error('Invalid Firebase configuration:', firebaseConfig);
+    throw new Error('Firebase configuration is missing required fields');
+}
+
+console.log('Firebase Config Loaded:', {
+    projectId: firebaseConfig.projectId,
+    authDomain: firebaseConfig.authDomain,
+    hasApiKey: !!firebaseConfig.apiKey
+});
+
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
 // The main list of stock items based on your paper and required output format
@@ -1690,12 +1725,28 @@ const App = () => {
         const initializeFirebase = async () => {
             try {
                 setProcessStep('initializing');
+                
+                // Log config for debugging
+                console.log('Initializing Firebase with config:', {
+                    projectId: firebaseConfig.projectId,
+                    authDomain: firebaseConfig.authDomain,
+                    hasRequiredFields: !!(firebaseConfig.projectId && firebaseConfig.apiKey && firebaseConfig.appId)
+                });
+                
+                // Validate config one more time
+                if (!firebaseConfig || !firebaseConfig.projectId) {
+                    throw new Error('Firebase configuration is invalid - missing projectId');
+                }
+                
                 const app = initializeApp(firebaseConfig);
+                console.log('Firebase app initialized successfully');
+                
                 const firestore = getFirestore(app);
                 const authentication = getAuth(app);
                 setDb(firestore);
                 setAuth(authentication);
                 setIsInitializing(false);
+                console.log('Firebase services ready');
 
                 // --- Securely check if the app has been set up ---
                 const setupDocRef = doc(firestore, `artifacts/${appId}/public`, 'config');
