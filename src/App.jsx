@@ -511,8 +511,8 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                         value={storeId}
                         onChange={(e) => setStoreId(e.target.value)}
                     >
-                        {Object.entries(stores).map(([id, name]) => (
-                            <option key={id} value={id}>{name}</option>
+                        {Object.entries(stores).map(([id, storeData]) => (
+                            <option key={id} value={id}>{storeData?.name || id}</option>
                         ))}
                     </SelectField>
                 </div>
@@ -2272,9 +2272,9 @@ const App = () => {
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
         // Get store details from stores object
-        const storeData = Object.entries(stores).find(([id]) => id === selectedStoreId);
-        const firmName = storeData?.[1]?.firmName || storeData?.[1] || 'Store Name';
-        const areaCode = storeData?.[1]?.areaCode || '';
+        const storeInfo = stores[selectedStoreId];
+        const firmName = storeInfo?.firmName || storeInfo?.name || 'Store Name';
+        const areaCode = storeInfo?.areaCode || '';
         
         let output = `${firmName}\n\n `;
 
