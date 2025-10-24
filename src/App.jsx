@@ -2196,6 +2196,24 @@ const App = () => {
         });
     }, [masterStockList]);
 
+    // Update miscStatus when masterStockList changes (especially for MISC items)
+    useEffect(() => {
+        if (masterStockList.MISC) {
+            setMiscStatus(prevStatus => {
+                const newStatus = { ...prevStatus };
+                masterStockList.MISC.forEach(item => {
+                    const key = `MISC-${item}`;
+                    // Only add if not already present
+                    if (!newStatus[key]) {
+                        newStatus[key] = 'available'; // default new items to available
+                        console.log(`➕ Adding new MISC item to status: ${item}`);
+                    }
+                });
+                return newStatus;
+            });
+        }
+    }, [masterStockList]);
+
     // Update helper functions when masterStockList changes
     const getEmptyStockDynamic = useCallback(() => {
         const stock = {};
