@@ -2018,6 +2018,15 @@ const App = () => {
                 setStores(newStores);
                 setStoresLoaded(true); // Mark stores as loaded
                 clearError(); // Clear any previous errors
+                
+                // Reset selectedStoreId if the currently selected store no longer exists
+                setSelectedStoreId(prevId => {
+                    if (prevId && !newStores[prevId]) {
+                        console.log("Selected store was deleted, resetting selection");
+                        return '';
+                    }
+                    return prevId;
+                });
             } catch (error) {
                 handleError(error, 'Store Data Processing');
             }
@@ -2033,6 +2042,16 @@ const App = () => {
             unsubscribeStores();
         };
     }, [db, appId, isAuthReady, userId, role]); // Added role to dependencies
+
+    // Reset order data when selected store changes (e.g., after deletion or switching)
+    useEffect(() => {
+        if (selectedStoreId && stores[selectedStoreId]) {
+            console.log("Store selection changed to:", selectedStoreId, stores[selectedStoreId]);
+            // Reset order quantities to ensure clean slate for the new store
+            setOrderQuantities({});
+            setSelectedMiscItems({});
+        }
+    }, [selectedStoreId, stores]);
 
     // 3. Set default storeId for admins after stores are loaded
     useEffect(() => {
