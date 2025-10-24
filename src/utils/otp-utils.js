@@ -31,7 +31,7 @@ export const sendOTP = async (phoneNumber, otp) => {
         // ============================================
         // Sign up at: https://www.aisensy.com/
         // Get 1000 free messages per month!
-        const AISENSY_API_KEY = '22ae4605-b0b2-11f0-bdde-0200cd936042'; // Add your API key
+        const AISENSY_API_KEY = ''; // Add your API key
         const AISENSY_PROJECT_NAME = ''; // Your project name
         
         if (AISENSY_API_KEY && AISENSY_PROJECT_NAME) {
@@ -103,7 +103,7 @@ export const sendOTP = async (phoneNumber, otp) => {
         // ============================================
         // Sign up at: https://2factor.in/
         // Best for SMS in India - completely FREE tier
-        const TWOFACTOR_API_KEY = ''; // Add your API key
+        const TWOFACTOR_API_KEY = '22ae4605-b0b2-11f0-bdde-0200cd936042'; // Add your API key
         
         if (TWOFACTOR_API_KEY) {
             try {
