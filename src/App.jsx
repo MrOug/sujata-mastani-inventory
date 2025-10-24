@@ -1789,6 +1789,12 @@ const App = () => {
                             active={currentView === 'usermanager'}
                             onClick={() => setView('usermanager')}
                         />
+                        <NavButton
+                            icon={List}
+                            label="Items"
+                            active={currentView === 'itemmanager'}
+                            onClick={() => setView('itemmanager')}
+                        />
                         
                         {selectedStoreId && (
                             <>
