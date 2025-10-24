@@ -468,7 +468,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => {
     const handleSave = async () => {
         try {
             await saveStock();
@@ -515,12 +515,12 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
             </div>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     // Updated section styling for Stitch UI
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`;
                                 return (
                                     <StockInput
@@ -554,7 +554,7 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
 /**
  * Stock Sold Report View (New 4th Tab)
  */
-const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary }) => {
+const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockSummary, masterStockList }) => {
     return (
         <div className="p-4 space-y-6">
             <h2 className="text-2xl font-bold font-display text-gray-900">Stock Sold Report</h2>
@@ -569,11 +569,11 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
             </p>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-red-600 border-b border-red-200 pb-2 mb-3">{category}</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`; 
                                 const sold = calculateSold(category, item);
                                 const current = currentStock[key] || 0;
@@ -612,7 +612,7 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
 /**
  * Admin Ordering View
  */
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast }) => {
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList }) => {
     const [showOutputModal, setShowOutputModal] = useState(false);
 
     const handleOutput = () => {
@@ -642,11 +642,11 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             </p>
 
             <div className="space-y-4">
-                {Object.keys(MASTER_STOCK_LIST).map(category => (
+                {Object.keys(masterStockList).map(category => (
                     <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                         <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
                         <div className="space-y-2">
-                            {MASTER_STOCK_LIST[category].map(item => {
+                            {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`;
                                 const current = currentStock[key] || 0;
 
@@ -849,6 +849,7 @@ const App = () => {
     const [yesterdayStock, setYesterdayStock] = useState(getEmptyStock());
     const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
     const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
+    const [masterStockList, setMasterStockList] = useState(MASTER_STOCK_LIST); // Dynamic stock list
     
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
@@ -1122,6 +1123,48 @@ const App = () => {
         }
     }, [stores, db, auth, userId, appId, role]); // Added role to dependencies
 
+    // Load and listen to master stock list from Firestore
+    useEffect(() => {
+        if (!db || !isAuthReady) return;
+
+        const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
+        
+        const unsubscribeList = onSnapshot(listDocRef, (docSnap) => {
+            if (docSnap.exists()) {
+                const data = docSnap.data();
+                if (data.list) {
+                    setMasterStockList(data.list);
+                    console.log('Master stock list loaded from Firestore');
+                }
+            } else {
+                // If document doesn't exist, create it with the default list
+                setDoc(listDocRef, {
+                    list: MASTER_STOCK_LIST,
+                    lastUpdated: new Date().toISOString()
+                }).then(() => {
+                    console.log('Created initial master stock list in Firestore');
+                }).catch(error => {
+                    console.error('Error creating master stock list:', error);
+                });
+            }
+        }, (error) => {
+            console.error('Error listening to master stock list:', error);
+        });
+
+        return () => unsubscribeList();
+    }, [db, appId, isAuthReady]);
+
+    // Update helper functions when masterStockList changes
+    const getEmptyStockDynamic = useCallback(() => {
+        const stock = {};
+        Object.keys(masterStockList).forEach(category => {
+            masterStockList[category].forEach(item => {
+                const key = `${category}-${item}`;
+                stock[key] = 0;
+            });
+        });
+        return stock;
+    }, [masterStockList]);
 
     const calculateSold = useCallback((category, item) => {
         const key = `${category}-${item}`;
@@ -1287,8 +1330,8 @@ const App = () => {
             };
 
             // Calculate sold stock for each item
-            Object.keys(MASTER_STOCK_LIST).forEach(category => {
-                MASTER_STOCK_LIST[category].forEach(item => {
+            Object.keys(masterStockList).forEach(category => {
+                masterStockList[category].forEach(item => {
                     const key = `${category}-${item}`;
                     const current = currentStock[key] || 0;
                     const yesterday = yesterdayStock[key] || 0;
@@ -1312,7 +1355,7 @@ const App = () => {
         } catch (error) {
             handleError(error, 'Data Export');
         }
-    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock]);
+    }, [role, stores, selectedStoreId, selectedDate, currentStock, yesterdayStock, masterStockList]);
 
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
@@ -1327,8 +1370,8 @@ const App = () => {
         const miscItems = [];
         const nonOrderedItems = [];
 
-        Object.keys(MASTER_STOCK_LIST).forEach(category => {
-            MASTER_STOCK_LIST[category].forEach(item => {
+        Object.keys(masterStockList).forEach(category => {
+            masterStockList[category].forEach(item => {
                 const key = `${category}-${item}`; 
                 const quantity = orderQuantities[key] || ''; 
                 if (quantity !== 0 && quantity !== '') {
@@ -1385,7 +1428,7 @@ const App = () => {
         }
 
         return output.trim();
-    }, [orderQuantities, selectedStoreId, stores]);
+    }, [orderQuantities, selectedStoreId, stores, masterStockList]);
 
     const handleLogout = async () => {
         if (auth) {
@@ -1706,6 +1749,7 @@ const App = () => {
                     <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" />
                     <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" />
                     <AdminButton icon={Store} label="Store Manager" viewName="storemanager" />
+                    <AdminButton icon={List} label="Item Manager" viewName="itemmanager" />
                 </div>
             </div>
         );
@@ -1801,6 +1845,16 @@ const App = () => {
             case 'usermanager':
                 if (!isAdmin) return <HomeView />;
                 return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} />;
+            case 'itemmanager':
+                if (!isAdmin) return <HomeView />;
+                return <ItemManagerView 
+                    db={db} 
+                    appId={appId} 
+                    masterStockList={masterStockList} 
+                    showToast={showToast} 
+                    showConfirm={showConfirm}
+                    onUpdateMasterList={setMasterStockList}
+                />;
             case 'entry':
                 return (
                     <StockEntryView
@@ -1812,6 +1866,7 @@ const App = () => {
                         selectedDate={selectedDate}
                         setSelectedDate={setSelectedDate}
                         showToast={showToast}
+                        masterStockList={masterStockList}
                     />
                 );
             case 'sold':
@@ -1822,6 +1877,7 @@ const App = () => {
                         yesterdayStock={yesterdayStock}
                         calculateSold={calculateSold}
                         soldStockSummary={soldStockSummary}
+                        masterStockList={masterStockList}
                     />
                 );
             case 'order':
@@ -1833,6 +1889,7 @@ const App = () => {
                         setOrderQuantities={setOrderQuantities}
                         generateOrderOutput={generateOrderOutput}
                         showToast={showToast}
+                        masterStockList={masterStockList}
                     />
                 );
             default:
@@ -1956,16 +2013,15 @@ const App = () => {
     );
 };
 
-export default App;
 // --- Item Management Component ---
-const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, showToast, showConfirm }) => {
+const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, showToast, showConfirm, onUpdateMasterList }) => {
     // Local state for edits, only save to Firestore on explicit save action
     const [localList, setLocalList] = useState(() => JSON.parse(JSON.stringify(initialMasterStockList))); // Deep copy for local edits
     const [isSavingList, setIsSavingList] = useState(false);
     const [newItemName, setNewItemName] = useState('');
-    const [newCategoryName, setNewCategoryName] = useState('');
-    const [editingCategory, setEditingCategory] = useState(null); // { oldName: string, newName: string } | null
-    const [editingItem, setEditingItem] = useState(null); // { category: string, oldName: string, newName: string } | null
+    const [selectedCategory, setSelectedCategory] = useState('');
+    const [editingItem, setEditingItem] = useState(null); // { category: string, oldName: string } | null
+    const [editingItemName, setEditingItemName] = useState('');
     const [expandedCategories, setExpandedCategories] = useState({}); // Track which categories are expanded
 
     // Reset local state if the initial list changes (e.g., Firestore update via snapshot)
@@ -1975,4 +2031,275 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         const expanded = {};
         Object.keys(initialMasterStockList).forEach(cat => { expanded[cat] = true; });
         setExpandedCategories(expanded);
+        // Set default category
+        if (!selectedCategory && Object.keys(initialMasterStockList).length > 0) {
+            setSelectedCategory(Object.keys(initialMasterStockList)[0]);
+        }
     }, [initialMasterStockList]);
+
+    const handleAddItem = async () => {
+        if (!newItemName.trim() || !selectedCategory) {
+            showToast('Please enter an item name and select a category', 'error');
+            return;
+        }
+
+        // Check if item already exists
+        if (localList[selectedCategory]?.includes(newItemName.trim())) {
+            showToast('Item already exists in this category', 'warning');
+            return;
+        }
+
+        const updatedList = { ...localList };
+        if (!updatedList[selectedCategory]) {
+            updatedList[selectedCategory] = [];
+        }
+        updatedList[selectedCategory] = [...updatedList[selectedCategory], newItemName.trim()];
+        
+        setLocalList(updatedList);
+        setNewItemName('');
+        showToast(`Item "${newItemName.trim()}" added to ${selectedCategory}`, 'success');
+    };
+
+    const handleDeleteItem = async (category, item) => {
+        const confirmed = await showConfirm({
+            title: 'Delete Item',
+            message: `Are you sure you want to delete "${item}" from ${category}? This will affect all stock entries.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            confirmColor: 'red'
+        });
+
+        if (!confirmed) return;
+
+        const updatedList = { ...localList };
+        updatedList[category] = updatedList[category].filter(i => i !== item);
+        
+        setLocalList(updatedList);
+        showToast(`Item "${item}" deleted from ${category}`, 'success');
+    };
+
+    const handleEditItem = (category, item) => {
+        setEditingItem({ category, oldName: item });
+        setEditingItemName(item);
+    };
+
+    const handleSaveEdit = async () => {
+        if (!editingItem || !editingItemName.trim()) {
+            showToast('Please enter a valid item name', 'error');
+            return;
+        }
+
+        const { category, oldName } = editingItem;
+        const newName = editingItemName.trim();
+
+        // Check if new name already exists (and is different from old name)
+        if (newName !== oldName && localList[category]?.includes(newName)) {
+            showToast('Item with this name already exists in this category', 'warning');
+            return;
+        }
+
+        const updatedList = { ...localList };
+        const index = updatedList[category].indexOf(oldName);
+        if (index !== -1) {
+            updatedList[category][index] = newName;
+        }
+        
+        setLocalList(updatedList);
+        setEditingItem(null);
+        setEditingItemName('');
+        showToast(`Item renamed from "${oldName}" to "${newName}"`, 'success');
+    };
+
+    const handleCancelEdit = () => {
+        setEditingItem(null);
+        setEditingItemName('');
+    };
+
+    const handleSaveAll = async () => {
+        const confirmed = await showConfirm({
+            title: 'Save Changes',
+            message: 'This will update the master stock list for all stores. Are you sure?',
+            confirmText: 'Save',
+            cancelText: 'Cancel',
+            confirmColor: 'orange'
+        });
+
+        if (!confirmed) return;
+
+        setIsSavingList(true);
+        try {
+            // Save to Firestore
+            const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
+            await setDoc(listDocRef, {
+                list: localList,
+                lastUpdated: new Date().toISOString()
+            });
+
+            // Call parent callback to update the app state
+            if (onUpdateMasterList) {
+                onUpdateMasterList(localList);
+            }
+
+            showToast('Master stock list updated successfully!', 'success');
+        } catch (error) {
+            console.error('Error saving master stock list:', error);
+            showToast(`Failed to save: ${error.message}`, 'error');
+        } finally {
+            setIsSavingList(false);
+        }
+    };
+
+    const toggleCategory = (category) => {
+        setExpandedCategories(prev => ({
+            ...prev,
+            [category]: !prev[category]
+        }));
+    };
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
+                <List className="w-6 h-6 mr-3 text-orange-600" /> Item Manager
+            </h2>
+            <p className="text-sm text-gray-600">Add, edit, or remove items from categories.</p>
+
+            {/* Add Item Form */}
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-4">
+                <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2">Add New Item</h3>
+                <div className="space-y-3">
+                    <label className="flex flex-col">
+                        <span className="text-sm font-semibold text-orange-700/80 pb-2">Category</span>
+                        <select
+                            className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 p-3 text-base font-normal leading-normal text-gray-900"
+                            value={selectedCategory}
+                            onChange={(e) => setSelectedCategory(e.target.value)}
+                        >
+                            {Object.keys(localList).map(cat => (
+                                <option key={cat} value={cat}>{cat}</option>
+                            ))}
+                        </select>
+                    </label>
+                    <label className="flex flex-col">
+                        <span className="text-sm font-semibold text-orange-700/80 pb-2">Item Name</span>
+                        <input
+                            type="text"
+                            className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 placeholder:text-gray-400 p-3 text-base font-normal leading-normal text-gray-900"
+                            value={newItemName}
+                            onChange={(e) => setNewItemName(e.target.value)}
+                            placeholder="e.g., Mango"
+                            onKeyPress={(e) => {
+                                if (e.key === 'Enter') {
+                                    handleAddItem();
+                                }
+                            }}
+                        />
+                    </label>
+                    <button
+                        onClick={handleAddItem}
+                        className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition duration-200"
+                    >
+                        Add Item
+                    </button>
+                </div>
+            </div>
+
+            {/* Items List by Category */}
+            <div className="space-y-4">
+                <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2">Current Items</h3>
+                {Object.keys(localList).map(category => (
+                    <div key={category} className="bg-white rounded-xl shadow-lg border border-gray-100 overflow-hidden">
+                        <button
+                            onClick={() => toggleCategory(category)}
+                            className="w-full p-4 flex justify-between items-center hover:bg-gray-50 transition"
+                        >
+                            <h4 className="text-lg font-bold text-gray-900">{category}</h4>
+                            <div className="flex items-center gap-2">
+                                <span className="text-xs bg-orange-100 text-orange-700 px-2 py-1 rounded-full">
+                                    {localList[category]?.length || 0} items
+                                </span>
+                                <span className="text-gray-500">
+                                    {expandedCategories[category] ? '▼' : '▶'}
+                                </span>
+                            </div>
+                        </button>
+                        
+                        {expandedCategories[category] && (
+                            <div className="p-4 pt-0 space-y-2">
+                                {localList[category]?.length > 0 ? (
+                                    localList[category].map(item => (
+                                        <div key={item} className="p-3 bg-gray-50 rounded-lg border border-gray-200 flex justify-between items-center">
+                                            {editingItem?.category === category && editingItem?.oldName === item ? (
+                                                <div className="flex-1 flex gap-2">
+                                                    <input
+                                                        type="text"
+                                                        className="flex-1 p-2 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600"
+                                                        value={editingItemName}
+                                                        onChange={(e) => setEditingItemName(e.target.value)}
+                                                        onKeyPress={(e) => {
+                                                            if (e.key === 'Enter') {
+                                                                handleSaveEdit();
+                                                            }
+                                                        }}
+                                                        autoFocus
+                                                    />
+                                                    <button
+                                                        onClick={handleSaveEdit}
+                                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg transition"
+                                                    >
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        onClick={handleCancelEdit}
+                                                        className="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white font-bold rounded-lg transition"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <>
+                                                    <span className="flex-1 text-gray-900">{item}</span>
+                                                    <div className="flex gap-2">
+                                                        <button
+                                                            onClick={() => handleEditItem(category, item)}
+                                                            className="px-3 py-1 bg-blue-500 hover:bg-blue-600 text-white text-sm font-bold rounded-lg transition"
+                                                        >
+                                                            Edit
+                                                        </button>
+                                                        <button
+                                                            onClick={() => handleDeleteItem(category, item)}
+                                                            className="p-1 rounded-full text-red-600 hover:bg-red-100 transition duration-150"
+                                                            aria-label={`Delete ${item}`}
+                                                        >
+                                                            <Trash2 className="w-5 h-5" />
+                                                        </button>
+                                                    </div>
+                                                </>
+                                            )}
+                                        </div>
+                                    ))
+                                ) : (
+                                    <p className="text-gray-500 text-center py-4">No items in this category</p>
+                                )}
+                            </div>
+                        )}
+                    </div>
+                ))}
+            </div>
+
+            {/* Save All Changes Button */}
+            <button
+                onClick={handleSaveAll}
+                disabled={isSavingList}
+                className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg transition duration-200 flex items-center justify-center disabled:opacity-50 text-xl"
+            >
+                {isSavingList ? (
+                    <Loader className="animate-spin w-6 h-6 mr-2" />
+                ) : (
+                    'Save All Changes'
+                )}
+            </button>
+        </div>
+    );
+};
+
+export default App;
