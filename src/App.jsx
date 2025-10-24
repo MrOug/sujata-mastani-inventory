@@ -100,6 +100,17 @@ const getEmptyStock = () => {
   return stock;
 };
 
+// Track stock status for MISC items (Available/Low Stock)
+const getEmptyMiscStatus = () => {
+  const status = {};
+  if (MASTER_STOCK_LIST.MISC) {
+    MASTER_STOCK_LIST.MISC.forEach(item => {
+      status[`MISC-${item}`] = 'available'; // default to available
+    });
+  }
+  return status;
+};
+
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
 const getYesterdayDate = () => {
     const d = new Date();
@@ -546,7 +557,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
 /**
  * Stock Entry View (For Staff)
  */
-const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList }) => {
+const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList, miscStatus, setMiscStatus }) => {
     const handleSave = async () => {
         try {
             await saveStock();
@@ -600,6 +611,41 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
                         <div className="space-y-2">
                             {masterStockList[category].map(item => {
                                 const key = `${category}-${item}`;
+                                
+                                // For MISC items, show Available/Low Stock buttons
+                                if (category === 'MISC') {
+                                    return (
+                                        <div key={key} className="flex items-center justify-between p-3 bg-white rounded-lg mb-2 border border-gray-100">
+                                            <label className="text-sm font-medium text-gray-800 w-1/2">{item}</label>
+                                            <div className="flex gap-2">
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'available' }))}
+                                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
+                                                        miscStatus[key] === 'available'
+                                                            ? 'bg-green-600 text-white shadow-md'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                >
+                                                    Available
+                                                </button>
+                                                <button
+                                                    type="button"
+                                                    onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'low' }))}
+                                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
+                                                        miscStatus[key] === 'low'
+                                                            ? 'bg-red-600 text-white shadow-md'
+                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                    }`}
+                                                >
+                                                    Low Stock
+                                                </button>
+                                            </div>
+                                        </div>
+                                    );
+                                }
+                                
+                                // For other categories, show regular input
                                 return (
                                     <StockInput
                                         key={key}
@@ -690,7 +736,7 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
 /**
  * Admin Ordering View
  */
-const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList, db, appId, selectedStoreId, stores }) => {
+const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, generateOrderOutput, showToast, masterStockList, db, appId, selectedStoreId, stores, miscStatus, selectedMiscItems, setSelectedMiscItems }) => {
     const [showOutputModal, setShowOutputModal] = useState(false);
     const [nextDayInfo, setNextDayInfo] = useState(null);
     const [weatherInfo, setWeatherInfo] = useState(null);
@@ -857,39 +903,81 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             </p>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).map(category => (
-                    <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
+                {Object.keys(masterStockList).map(category => {
+                    // Skip MISC category - handle it separately below
+                    if (category === 'MISC') return null;
+                    
+                    return (
+                        <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                            <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
+                            <div className="space-y-2">
+                                {masterStockList[category].map(item => {
+                                    const key = `${category}-${item}`;
+                                    const current = currentStock[key] || 0;
+
+                                    return (
+                                        <div
+                                            key={key}
+                                            className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200`}
+                                        >
+                                            <div className="w-1/2">
+                                                <p className="text-base font-semibold text-gray-900">{item}</p>
+                                                <p className="text-xs text-orange-600">Current Stock: {current}</p>
+                                            </div>
+                                            <input
+                                                type="number"
+                                                min="0"
+                                                step="0.01"
+                                                value={orderQuantities[key] || ''}
+                                                onChange={(e) => setOrderQuantities(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
+                                                placeholder="Order"
+                                                className="w-1/3 p-2 text-base text-right bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150 shadow-sm"
+                                            />
+                                        </div>
+                                    );
+                                })}
+                            </div>
+                        </div>
+                    );
+                })}
+
+                {/* Low Stock MISC Items Section */}
+                {masterStockList.MISC && masterStockList.MISC.some(item => miscStatus[`MISC-${item}`] === 'low') && (
+                    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <h3 className="text-lg font-bold text-red-700 border-b border-red-200 pb-2 mb-3">⚠️ Low Stock Items (Select to Order)</h3>
                         <div className="space-y-2">
-                            {masterStockList[category].map(item => {
-                                const key = `${category}-${item}`;
-                                const current = currentStock[key] || 0;
+                            {masterStockList.MISC.map(item => {
+                                const key = `MISC-${item}`;
+                                // Only show items marked as Low Stock
+                                if (miscStatus[key] !== 'low') return null;
 
                                 return (
                                     <div
                                         key={key}
-                                        className={`flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200`}
+                                        className={`flex items-center justify-between p-3 rounded-lg border-2 transition ${
+                                            selectedMiscItems[key]
+                                                ? 'bg-orange-50 border-orange-400'
+                                                : 'bg-gray-50 border-gray-200'
+                                        }`}
                                     >
-                                        <div className="w-1/2">
-                                            <p className="text-base font-semibold text-gray-900">{item}</p>
-                                            <p className="text-xs text-orange-600">Current Stock: {current}</p>
+                                        <div className="flex items-center gap-3 w-2/3">
+                                            <input
+                                                type="checkbox"
+                                                checked={selectedMiscItems[key] || false}
+                                                onChange={(e) => setSelectedMiscItems(prev => ({ ...prev, [key]: e.target.checked }))}
+                                                className="w-5 h-5 text-orange-600 border-gray-300 rounded focus:ring-orange-600"
+                                            />
+                                            <div>
+                                                <p className="text-base font-semibold text-gray-900">{item}</p>
+                                                <p className="text-xs text-red-600">⚠️ Low Stock</p>
+                                            </div>
                                         </div>
-                                        <input
-                                            type="number"
-                                            min="0"
-                                            step="0.01"
-                                            value={orderQuantities[key] || ''}
-                                            onChange={(e) => setOrderQuantities(prev => ({ ...prev, [key]: parseFloat(e.target.value) || 0 }))}
-                                            placeholder="Order"
-                                            // Removed complex CSS hacks here; relying on global style block
-                                            className="w-1/3 p-2 text-base text-right bg-white border border-gray-300 rounded-lg focus:ring-1 focus:ring-orange-600 focus:border-orange-600 transition duration-150 shadow-sm"
-                                        />
                                     </div>
                                 );
                             })}
                         </div>
                     </div>
-                ))}
+                )}
             </div>
 
             <button
@@ -1732,6 +1820,8 @@ const App = () => {
     const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
     const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
     const [masterStockList, setMasterStockList] = useState(MASTER_STOCK_LIST); // Dynamic stock list
+    const [miscStatus, setMiscStatus] = useState(getEmptyMiscStatus()); // Track MISC items stock status
+    const [selectedMiscItems, setSelectedMiscItems] = useState({}); // Track which MISC items are selected for ordering
     
     // Auto-switch to register screen if it's the first user
     useEffect(() => {
@@ -2276,7 +2366,10 @@ const App = () => {
         const firmName = storeInfo?.firmName || storeInfo?.name || 'Store Name';
         const areaCode = storeInfo?.areaCode || '';
         
-        let output = `${firmName}\n`;
+        // Create short code from firm name (e.g., "Venkateshwara" -> "VK")
+        const firmShortCode = firmName.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
+        
+        let output = `${firmShortCode}\n`;
 
         // Helper to format items list - each item on its own line with quantity or empty
         const formatItemsList = (category) => {
@@ -2314,26 +2407,30 @@ const App = () => {
             });
         }
 
-        // MISC items (if needed)
+        // Selected MISC items (only those checked and marked as low stock)
         if (masterStockList.MISC) {
+            const selectedMiscList = [];
             masterStockList.MISC.forEach(item => {
-                if (item !== 'Ice Cream Dabee') {
-                    const key = `MISC-${item}`;
-                    const quantity = orderQuantities[key] || '';
-                    if (quantity !== '' && quantity !== 0) {
-                        output += `${item} - ${quantity}\n`;
-                    }
+                const key = `MISC-${item}`;
+                // Only include if marked as low stock AND selected
+                if (miscStatus[key] === 'low' && selectedMiscItems[key]) {
+                    selectedMiscList.push(`*${item}*`);
                 }
             });
+            
+            if (selectedMiscList.length > 0) {
+                output += '\n' + selectedMiscList.join('\n') + '\n';
+            }
         }
 
-        // Add area code at the bottom
-        if (areaCode) {
-            output += `\n${areaCode}`;
+        // Add area code short form at the bottom
+        const areaShortCode = areaCode.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
+        if (areaShortCode) {
+            output += `\n${areaShortCode}`;
         }
 
         return output;
-    }, [orderQuantities, currentStock, selectedStoreId, stores, masterStockList]);
+    }, [orderQuantities, currentStock, selectedStoreId, stores, masterStockList, miscStatus, selectedMiscItems]);
 
     const handleLogout = async () => {
         if (auth) {
@@ -2730,6 +2827,8 @@ const App = () => {
                         setSelectedDate={setSelectedDate}
                         showToast={showToast}
                         masterStockList={masterStockList}
+                        miscStatus={miscStatus}
+                        setMiscStatus={setMiscStatus}
                     />
                 );
             case 'sold':
@@ -2757,6 +2856,9 @@ const App = () => {
                         appId={appId}
                         selectedStoreId={selectedStoreId}
                         stores={stores}
+                        miscStatus={miscStatus}
+                        selectedMiscItems={selectedMiscItems}
+                        setSelectedMiscItems={setSelectedMiscItems}
                     />
                 );
             case 'orderstats':
