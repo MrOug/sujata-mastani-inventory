@@ -2144,66 +2144,17 @@ const App = () => {
         );
     }
 
-    // If no user is authenticated, show login screen immediately
+    // If no user is authenticated, show auth modal directly
     if (!userId || !role) {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <div className="bg-white rounded-xl shadow-2xl border-t-4 border-orange-600 p-8 text-center">
-                        {/* Logo/Brand */}
-                        <div className="mb-6">
-                            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                                <Store className="w-10 h-10 text-orange-600" />
-                            </div>
-                            <h1 className="text-4xl font-bold font-display text-orange-600 mb-2">Sujata Mastani</h1>
-                            <p className="text-gray-600 text-lg">Inventory Management</p>
-                        </div>
-
-                        {/* Welcome Message */}
-                        <div className="mb-8">
-                            <p className="text-gray-700 font-medium mb-2">Welcome! 👋</p>
-                            <p className="text-gray-600 text-sm">Please log in to manage your inventory</p>
-                        </div>
-
-                        {/* Action Buttons */}
-                        <div className="space-y-3">
-                            <button
-                                onClick={() => setShowAuthModal(true)}
-                                className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition duration-150 shadow-lg flex items-center justify-center text-lg font-display group"
-                            >
-                                <User className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
-                                Log In
-                            </button>
-                            
-                            {isFirstUser && (
-                                <button
-                                    onClick={() => setShowAuthModal(true)}
-                                    className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition duration-150 shadow-lg flex items-center justify-center text-lg font-display group"
-                                >
-                                    <UserPlus className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
-                                    Register Admin
-                                </button>
-                            )}
-                        </div>
-
-                        {/* Info Footer */}
-                        <div className="mt-6 pt-6 border-t border-gray-200">
-                            <p className="text-xs text-gray-500">
-                                Secure • Fast • Reliable
-                            </p>
-                        </div>
-                    </div>
-                </div>
-                
-                {showAuthModal && (
-                    <AuthModal 
-                        auth={auth} 
-                        onClose={() => setShowAuthModal(false)}
-                        onLoginSuccess={handleAuthSuccess}
-                        isFirstUser={isFirstUser}
-                    />
-                )}
-            </div>
+            <>
+                <AuthModal 
+                    auth={auth} 
+                    onClose={null} // No close button - must login
+                    onLoginSuccess={handleAuthSuccess}
+                    isFirstUser={isFirstUser}
+                />
+            </>
         );
     }
 
