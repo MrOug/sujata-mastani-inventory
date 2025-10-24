@@ -2385,10 +2385,7 @@ const App = () => {
         const firmName = storeInfo?.firmName || storeInfo?.name || 'Store Name';
         const areaCode = storeInfo?.areaCode || '';
         
-        // Create short code from firm name (e.g., "Venkateshwara" -> "VK")
-        const firmShortCode = firmName.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
-        
-        let output = `${firmShortCode}\n`;
+        let output = `${firmName}\n \n`;
 
         // Helper to format items list - each item on its own line with quantity or empty
         const formatItemsList = (category) => {
@@ -2442,10 +2439,9 @@ const App = () => {
             }
         }
 
-        // Add area code short form at the bottom
-        const areaShortCode = areaCode.split(' ').map(word => word.charAt(0).toUpperCase()).join('');
-        if (areaShortCode) {
-            output += `\n${areaShortCode}`;
+        // Add area code at the bottom
+        if (areaCode) {
+            output += `\n${areaCode} `;
         }
 
         return output;
