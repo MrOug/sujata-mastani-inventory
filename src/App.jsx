@@ -2156,7 +2156,9 @@ const App = () => {
     useEffect(() => {
         if (!db || !isAuthReady) return;
 
-        const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
+        const listPath = `artifacts/${appId}/public/data/master_stock_list`;
+        console.log('📂 Setting up listener for master_stock_list at:', listPath);
+        const listDocRef = doc(db, `artifacts/${appId}/public/data`, 'master_stock_list');
         
         const unsubscribeList = onSnapshot(listDocRef, (docSnap) => {
             if (docSnap.exists()) {
@@ -3178,12 +3180,14 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
 
         setIsSavingList(true);
         try {
+            const listPath = `artifacts/${appId}/public/data/master_stock_list`;
             // Save to Firestore
             console.log('💾 Saving master stock list to Firestore:', {
+                path: listPath,
                 categories: Object.keys(localList),
                 itemCounts: Object.keys(localList).map(cat => `${cat}: ${localList[cat].length} items`)
             });
-            const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
+            const listDocRef = doc(db, `artifacts/${appId}/public/data`, 'master_stock_list');
             await setDoc(listDocRef, {
                 list: localList,
                 lastUpdated: new Date().toISOString()
