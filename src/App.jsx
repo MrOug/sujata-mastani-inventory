@@ -849,6 +849,247 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
 
 
 /**
+ * Order Statistics View - Detailed breakdown of daily orders
+ */
+const OrderStatsView = ({ db, appId, selectedStoreId, stores, showToast, masterStockList }) => {
+    const [orders, setOrders] = useState([]);
+    const [loading, setLoading] = useState(true);
+    const [selectedDate, setSelectedDate] = useState('');
+    const [dateOrders, setDateOrders] = useState([]);
+
+    useEffect(() => {
+        if (!db || !selectedStoreId) return;
+
+        const loadOrders = async () => {
+            setLoading(true);
+            try {
+                const ordersColRef = collection(db, `artifacts/${appId}/public/data/orders`);
+                const querySnapshot = await getDocs(ordersColRef);
+                
+                const ordersData = [];
+                querySnapshot.forEach((doc) => {
+                    const data = doc.data();
+                    if (data.storeId === selectedStoreId) {
+                        ordersData.push({ id: doc.id, ...data });
+                    }
+                });
+
+                // Sort by order date descending (newest first)
+                ordersData.sort((a, b) => new Date(b.orderDate) - new Date(a.orderDate));
+                setOrders(ordersData);
+                
+                // Set today's date as default
+                if (ordersData.length > 0) {
+                    const latestDate = new Date(ordersData[0].orderDate).toISOString().split('T')[0];
+                    setSelectedDate(latestDate);
+                }
+            } catch (error) {
+                console.error('Error loading orders:', error);
+                showToast('Failed to load order statistics', 'error');
+            } finally {
+                setLoading(false);
+            }
+        };
+
+        loadOrders();
+    }, [db, appId, selectedStoreId]);
+
+    // Get unique dates from orders
+    const uniqueDates = useMemo(() => {
+        const dates = orders.map(order => new Date(order.orderDate).toISOString().split('T')[0]);
+        return [...new Set(dates)].sort((a, b) => new Date(b) - new Date(a));
+    }, [orders]);
+
+    // Get orders for selected date
+    useEffect(() => {
+        if (selectedDate) {
+            const filtered = orders.filter(order => {
+                const orderDate = new Date(order.orderDate).toISOString().split('T')[0];
+                return orderDate === selectedDate;
+            });
+            setDateOrders(filtered);
+        }
+    }, [selectedDate, orders]);
+
+    // Calculate totals for selected date
+    const dateSummary = useMemo(() => {
+        if (dateOrders.length === 0) return null;
+
+        const totalsByItem = {};
+        let grandTotal = 0;
+
+        dateOrders.forEach(order => {
+            if (order.orderQuantities) {
+                Object.entries(order.orderQuantities).forEach(([key, qty]) => {
+                    if (qty > 0) {
+                        totalsByItem[key] = (totalsByItem[key] || 0) + qty;
+                        grandTotal += qty;
+                    }
+                });
+            }
+        });
+
+        return {
+            totalsByItem,
+            grandTotal,
+            orderCount: dateOrders.length
+        };
+    }, [dateOrders]);
+
+    const formatDate = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleDateString('en-IN', {
+            weekday: 'long',
+            day: '2-digit',
+            month: 'long',
+            year: 'numeric'
+        });
+    };
+
+    const formatTime = (dateStr) => {
+        const date = new Date(dateStr);
+        return date.toLocaleTimeString('en-IN', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+    };
+
+    return (
+        <div className="p-4 space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
+                <ShoppingCart className="w-6 h-6 mr-3 text-orange-600" /> Order Statistics
+            </h2>
+            <p className="text-sm text-gray-600">
+                Daily breakdown of ordered items for <span className="font-semibold">{stores[selectedStoreId]}</span>
+            </p>
+
+            {loading ? (
+                <div className="flex items-center justify-center py-12">
+                    <Loader className="animate-spin w-8 h-8 text-orange-600 mr-3" />
+                    <span className="text-gray-600">Loading order statistics...</span>
+                </div>
+            ) : orders.length === 0 ? (
+                <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-center">
+                    <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
+                    <p className="text-gray-600 font-medium">No orders found for this store</p>
+                    <p className="text-sm text-gray-500 mt-2">Order statistics will appear here once you generate orders</p>
+                </div>
+            ) : (
+                <>
+                    {/* Date Selector */}
+                    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                        <label className="block text-sm font-medium text-gray-700 mb-2">
+                            Select Date
+                        </label>
+                        <select
+                            value={selectedDate}
+                            onChange={(e) => setSelectedDate(e.target.value)}
+                            className="w-full p-3 text-base bg-gray-50 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition duration-150"
+                        >
+                            {uniqueDates.map(date => (
+                                <option key={date} value={date}>
+                                    {formatDate(date)}
+                                </option>
+                            ))}
+                        </select>
+                    </div>
+
+                    {/* Summary Card */}
+                    {dateSummary && (
+                        <div className="bg-gradient-to-r from-orange-50 to-yellow-50 p-6 rounded-xl shadow-lg border border-orange-200">
+                            <h3 className="text-lg font-bold text-orange-800 mb-4">Summary for {formatDate(selectedDate)}</h3>
+                            <div className="grid grid-cols-2 gap-4">
+                                <div className="bg-white p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600">Total Orders</p>
+                                    <p className="text-3xl font-bold text-orange-600">{dateSummary.orderCount}</p>
+                                </div>
+                                <div className="bg-white p-4 rounded-lg">
+                                    <p className="text-sm text-gray-600">Total Items</p>
+                                    <p className="text-3xl font-bold text-green-600">{dateSummary.grandTotal}</p>
+                                </div>
+                            </div>
+                        </div>
+                    )}
+
+                    {/* Individual Orders */}
+                    {dateOrders.length > 0 && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-gray-900">Orders on this day ({dateOrders.length})</h3>
+                            {dateOrders.map((order, idx) => (
+                                <div key={order.id} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                                    <div className="flex justify-between items-center mb-3">
+                                        <h4 className="text-base font-semibold text-gray-900">Order #{idx + 1}</h4>
+                                        <span className="text-sm text-gray-500">{formatTime(order.orderDate)}</span>
+                                    </div>
+                                    
+                                    {order.holidays && order.holidays.length > 0 && (
+                                        <div className="mb-2 flex flex-wrap gap-2">
+                                            {order.holidays.map((holiday, hidx) => (
+                                                <span key={hidx} className="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full">
+                                                    🎊 {holiday.name}
+                                                </span>
+                                            ))}
+                                        </div>
+                                    )}
+                                    
+                                    {order.weather && (
+                                        <div className="mb-2 flex items-center gap-2 text-sm text-gray-600">
+                                            <span>{order.weather.emoji}</span>
+                                            <span>{order.weather.temp || order.weather.mockData?.temp}°C</span>
+                                            <span className="text-gray-400">•</span>
+                                            <span>{order.weather.description || order.weather.mockData?.description}</span>
+                                        </div>
+                                    )}
+                                </div>
+                            ))}
+                        </div>
+                    )}
+
+                    {/* Detailed Item Breakdown */}
+                    {dateSummary && dateSummary.totalsByItem && (
+                        <div className="space-y-4">
+                            <h3 className="text-lg font-bold text-gray-900">Item Breakdown</h3>
+                            {Object.keys(masterStockList).map(category => {
+                                const categoryItems = masterStockList[category]
+                                    .map(item => {
+                                        const key = `${category}-${item}`;
+                                        const qty = dateSummary.totalsByItem[key] || 0;
+                                        return { item, qty, key };
+                                    })
+                                    .filter(item => item.qty > 0);
+
+                                if (categoryItems.length === 0) return null;
+
+                                const categoryTotal = categoryItems.reduce((sum, item) => sum + item.qty, 0);
+
+                                return (
+                                    <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                                        <div className="flex justify-between items-center mb-3">
+                                            <h4 className="text-lg font-bold text-orange-700">{category}</h4>
+                                            <span className="text-sm font-semibold bg-orange-100 text-orange-700 px-3 py-1 rounded-full">
+                                                Total: {categoryTotal}
+                                            </span>
+                                        </div>
+                                        <div className="space-y-2">
+                                            {categoryItems.map(({ item, qty, key }) => (
+                                                <div key={key} className="flex justify-between items-center p-2 bg-gray-50 rounded-lg">
+                                                    <span className="text-gray-900 font-medium">{item}</span>
+                                                    <span className="text-orange-600 font-bold text-lg">{qty}</span>
+                                                </div>
+                                            ))}
+                                        </div>
+                                    </div>
+                                );
+                            })}
+                        </div>
+                    )}
+                </>
+            )}
+        </div>
+    );
+};
+
+/**
  * Order History View - See past orders
  */
 const OrderHistoryView = ({ db, appId, selectedStoreId, stores, showToast }) => {
@@ -2051,6 +2292,7 @@ const App = () => {
                 
                 <div className="grid grid-cols-2 gap-4">
                     <AdminButton icon={ShoppingCart} label="Order" viewName="order" />
+                    <AdminButton icon={List} label="Order Stats" viewName="orderstats" />
                     <AdminButton icon={List} label="Order History" viewName="orderhistory" />
                     <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" />
                     <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" />
@@ -2206,6 +2448,18 @@ const App = () => {
                         appId={appId}
                         selectedStoreId={selectedStoreId}
                         stores={stores}
+                    />
+                );
+            case 'orderstats':
+                if (!isAdmin) return <HomeView />;
+                return (
+                    <OrderStatsView
+                        db={db}
+                        appId={appId}
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        showToast={showToast}
+                        masterStockList={masterStockList}
                     />
                 );
             case 'orderhistory':
