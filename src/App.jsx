@@ -68,19 +68,19 @@ const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial
 const MASTER_STOCK_LIST = {
   MILKSHAKE: [
     'Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch',
-    'Kesar Mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)',
+    'Kesar mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)',
   ],
   'ICE CREAM': [
     'Mango', 'Pista', 'Pineapple', 'Vanilla', 'Rose', 'Orange', 'Keshar Pista', 'Chocolate',
     'Strawberry', 'Butterscotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam',
-    'Chocolate Choco Chips', 'Kaju Draksha', 'Gulkand', 'Jagdalu', 'VOP', 'Peru',
+    'Chocolate Choco Chips', 'Kaju Draksha', 'Gulkand Badam', 'Jagdalu', 'VOP', 'Peru',
     'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Mango Bites',
   ],
   TOPPINGS: [
     'Dry Fruit', 'Pista', 'Badam', 'Pista Powder', 'Cherry'
   ],
   'ICE CREAM DABBE': [
-    'Ice Cream Dabbe'
+    'Ice Cream Dabee'
   ],
   MISC: [
     'Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container'
@@ -2276,50 +2276,47 @@ const App = () => {
         const firmName = storeInfo?.firmName || storeInfo?.name || 'Store Name';
         const areaCode = storeInfo?.areaCode || '';
         
-        let output = `${firmName}\n\n `;
+        let output = `${firmName}\n`;
 
-        // Helper to format items list (no quantities, just names separated by " - ")
+        // Helper to format items list - each item on its own line with " - " at the end
         const formatItemsList = (category) => {
             const items = masterStockList[category] || [];
-            return items.map(item => item.replace(' (Seasonal)', '')).join(' - ') + ' -';
+            return items.map(item => `${item.replace(' (Seasonal)', '')} - `).join('\n');
         };
 
         // MILKSHAKE
         if (masterStockList.MILKSHAKE) {
-            output += `*MILKSHAKE* ${formatItemsList('MILKSHAKE')}\n\n `;
+            output += ` *MILKSHAKE* \n\n${formatItemsList('MILKSHAKE')}\n`;
         }
 
         // ICE CREAM
         if (masterStockList['ICE CREAM']) {
-            output += `*ICE CREAM* ${formatItemsList('ICE CREAM')}\n`;
+            output += ` \n*ICE CREAM*\n${formatItemsList('ICE CREAM')}\n`;
         }
 
         // TOPPINGS
         if (masterStockList.TOPPINGS) {
-            output += ` *TOPPINGS* ${formatItemsList('TOPPINGS')}\n`;
+            output += `\n *TOPPINGS* \n${formatItemsList('TOPPINGS')}\n`;
         }
 
-        // ICE CREAM DABBE - Show the quantity from current stock
+        // ICE CREAM DABBE
         if (masterStockList['ICE CREAM DABBE']) {
+            output += '\n';
             masterStockList['ICE CREAM DABBE'].forEach(item => {
                 const key = `ICE CREAM DABBE-${item}`;
                 const quantity = currentStock[key] || orderQuantities[key] || '';
-                if (quantity !== '' && quantity !== 0) {
-                    output += `${item} - ${quantity}\n`;
-                } else {
-                    output += `${item} - \n`;
-                }
+                output += `${item} - \n`;
             });
         }
 
-        // MISC items (excluding Ice Cream Dabbe)
+        // MISC items (if needed)
         if (masterStockList.MISC) {
             masterStockList.MISC.forEach(item => {
                 if (item !== 'Ice Cream Dabee') {
                     const key = `MISC-${item}`;
                     const quantity = orderQuantities[key] || '';
                     if (quantity !== '' && quantity !== 0) {
-                        output += `${item} - ${quantity}\n`;
+                        output += `${item} - \n`;
                     }
                 }
             });
@@ -2330,7 +2327,7 @@ const App = () => {
             output += `\n${areaCode}`;
         }
 
-        return output.trim();
+        return output;
     }, [orderQuantities, currentStock, selectedStoreId, stores, masterStockList]);
 
     const handleLogout = async () => {
