@@ -2833,6 +2833,7 @@ const App = () => {
             case 'entry':
                 return (
                     <StockEntryView
+                        key={JSON.stringify(Object.keys(masterStockList))}
                         storeId={storeName}
                         stockData={currentStock}
                         setStockData={setCurrentStock}
@@ -2850,6 +2851,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />; 
                 return (
                     <StockSoldView
+                        key={JSON.stringify(Object.keys(masterStockList))}
                         currentStock={currentStock}
                         yesterdayStock={yesterdayStock}
                         calculateSold={calculateSold}
@@ -2861,6 +2863,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />; 
                 return (
                     <OrderingView
+                        key={JSON.stringify(Object.keys(masterStockList))}
                         currentStock={currentStock}
                         orderQuantities={orderQuantities}
                         setOrderQuantities={setOrderQuantities}
@@ -2880,6 +2883,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />;
                 return (
                     <OrderStatsView
+                        key={JSON.stringify(Object.keys(masterStockList))}
                         db={db}
                         appId={appId}
                         selectedStoreId={selectedStoreId}
