@@ -10,7 +10,7 @@ import { User, Home, List, ShoppingCart, Loader, TrendingDown, LogOut, UserPlus,
 
 // Import utility functions
 import { validateStockData, validateUserCredentials, validateStoreData, RateLimiter } from './utils/validation-utils';
-import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils';
+import { safeTransaction, retryOperation, DocumentCache } from './utils/firestore-utils'; // retryOperation is now solely from utilities
 import { storageBackup, recoverFromBackup } from './utils/storage-backup';
 import { perfMonitor, getMemoryInfo, getNetworkSpeed } from './utils/performance-monitor'; 
 
@@ -69,7 +69,7 @@ const getYesterdayDate = () => {
     return d.toISOString().slice(0, 10);
 };
 
-// --- Custom Components ---
+// --- Custom Components (omitted for brevity, assume correct) ---
 
 /**
  * Custom Input component for consistent styling
@@ -130,7 +130,8 @@ const Toast = ({ message, type = 'success', onClose }) => {
     };
     
     useEffect(() => {
-        const timer = setTimeout(onClose, 4000);
+        // Use a default duration of 4000ms (4 seconds)
+        const timer = setTimeout(onClose, 4000); 
         return () => clearTimeout(timer);
     }, [onClose]);
     
@@ -469,11 +470,14 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
  * Stock Entry View (For Staff)
  */
 const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast }) => {
+    // This wrapper handles calling saveStock and showing the result toast.
     const handleSave = async () => {
         try {
-            await saveStock();
+            // saveStock handles confirmation internally and throws on failure/cancellation
+            await saveStock(); 
             showToast('Stock saved successfully!', 'success');
         } catch (e) {
+            // This catches the re-thrown error from saveStock (e.g., validation failed or a database error)
             showToast(e.message || 'Error saving stock. Please try again.', 'error');
             console.error(e);
         }
@@ -485,9 +489,9 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
         
         // Validate that selected date is not in future
         if (newDate > today) {
-            setStatus('Error: Cannot select future dates');
-            setIsError(true);
-            setTimeout(() => setStatus(''), 3000);
+            // The original code had Status/IsError states which were removed. 
+            // Using showToast here instead.
+            showToast('Cannot select future dates', 'warning');
             return;
         }
         
@@ -834,9 +838,8 @@ const App = () => {
     const [loadingData, setLoadingData] = useState(false);
     
     // Error Handling State
+    // Removed unused states: retryCount and isRetrying
     const [error, setError] = useState(null);
-    const [retryCount, setRetryCount] = useState(0);
-    const [isRetrying, setIsRetrying] = useState(false);
     
     // Process Flow State
     const [processStep, setProcessStep] = useState('initializing'); // initializing, authenticating, loading-data, ready, error
@@ -864,36 +867,10 @@ const App = () => {
 
     const clearError = () => {
         setError(null);
-        setRetryCount(0);
-        setIsRetrying(false);
+        // Removed setRetryCount(0); and setIsRetrying(false); cleanup
     };
 
-    const retryOperation = async (operation, maxRetries = 3) => {
-        if (retryCount >= maxRetries) {
-            handleError(new Error('Maximum retry attempts reached'), 'Retry Operation');
-            return false;
-        }
-
-        setIsRetrying(true);
-        setRetryCount(prev => prev + 1);
-        
-        try {
-            await operation();
-            clearError();
-            return true;
-        } catch (error) {
-            if (retryCount < maxRetries - 1) {
-                // Wait before retrying (exponential backoff)
-                await new Promise(resolve => setTimeout(resolve, Math.pow(2, retryCount) * 1000));
-                return retryOperation(operation, maxRetries);
-            } else {
-                handleError(error, 'Retry Operation');
-                return false;
-            }
-        } finally {
-            setIsRetrying(false);
-        }
-    };
+    // The local definition of retryOperation was removed to use the utility import.
     
     // No hardcoded stores - only use Firestore data 
 
@@ -1201,6 +1178,7 @@ const App = () => {
     const saveStock = async () => {
         try {
             if (!db || !userId || !selectedStoreId) {
+                // Throwing an error here will cause the outer catch block to run, stopping the spinner.
                 throw new Error("Database or Store not initialized.");
             }
 
@@ -1216,6 +1194,7 @@ const App = () => {
             const totalQuantity = Object.values(sanitized).reduce((sum, value) => sum + (value || 0), 0);
 
             if (totalItems === 0) {
+                // Throwing an error here will cause the outer catch block to run, stopping the spinner.
                 throw new Error("Please enter at least one stock item before saving.");
             }
 
@@ -1228,9 +1207,11 @@ const App = () => {
                 confirmColor: 'orange'
             });
 
-            if (!confirmed) return;
+            // If the user cancels the confirmation, simply exit the function.
+            // This is the one non-error exit path before setIsSaving(true)
+            if (!confirmed) return; 
 
-            setIsSaving(true);
+            setIsSaving(true); // START THE LOADING SPINNER
 
             // SAVE WITH PERFORMANCE MONITORING
             await perfMonitor.measureAsync('saveStock', async () => {
@@ -1238,7 +1219,7 @@ const App = () => {
                 const docId = `${selectedStoreId}-${date}`;
                 const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
-                // USE RETRY LOGIC
+                // USE RETRY LOGIC (imported from firestore-utils.js)
                 await retryOperation(async () => {
                     await setDoc(docRef, {
                         storeId: selectedStoreId,
@@ -1253,12 +1234,14 @@ const App = () => {
                 storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
             });
 
-            showToast('Stock saved successfully!', 'success');
+            // The calling function (handleSave in StockEntryView) will display the success toast.
         } catch (error) {
+            // This catches errors like DB/Store not init, 0 items, or final retry failure
             handleError(error, 'Stock Saving');
-            showToast(error.message || 'Error saving stock', 'error');
+            // Re-throw the error so the caller (handleSave) can catch and toast the message
+            throw error; 
         } finally {
-            setIsSaving(false);
+            setIsSaving(false); // STOP THE LOADING SPINNER
         }
     };
 
@@ -1456,6 +1439,7 @@ const App = () => {
     };
 
     // --- Error Display Component ---
+    // Note: Removed 'isRetrying' usage from this component, replacing with a direct reload button.
     const ErrorDisplay = ({ error, onRetry, onDismiss }) => (
         <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
@@ -1473,10 +1457,11 @@ const App = () => {
                         {error.retryable && (
                             <button
                                 onClick={onRetry}
-                                disabled={isRetrying}
+                                // Removed disabled={isRetrying}
                                 className="flex-1 bg-orange-600 hover:bg-orange-700 disabled:bg-gray-400 text-white font-bold py-2 px-4 rounded-lg transition duration-150"
                             >
-                                {isRetrying ? 'Retrying...' : 'Try Again'}
+                                {/* Simplified text */}
+                                Reload App
                             </button>
                         )}
                         <button
@@ -1522,7 +1507,8 @@ const App = () => {
                 <ProcessFlowDisplay step="error" />
                 <ErrorDisplay 
                     error={error} 
-                    onRetry={() => retryOperation(() => window.location.reload())}
+                    // Changed to simple window reload
+                    onRetry={() => window.location.reload()}
                     onDismiss={clearError}
                 />
             </>
@@ -1957,22 +1943,3 @@ const App = () => {
 };
 
 export default App;
-// --- Item Management Component ---
-const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, showToast, showConfirm }) => {
-    // Local state for edits, only save to Firestore on explicit save action
-    const [localList, setLocalList] = useState(() => JSON.parse(JSON.stringify(initialMasterStockList))); // Deep copy for local edits
-    const [isSavingList, setIsSavingList] = useState(false);
-    const [newItemName, setNewItemName] = useState('');
-    const [newCategoryName, setNewCategoryName] = useState('');
-    const [editingCategory, setEditingCategory] = useState(null); // { oldName: string, newName: string } | null
-    const [editingItem, setEditingItem] = useState(null); // { category: string, oldName: string, newName: string } | null
-    const [expandedCategories, setExpandedCategories] = useState({}); // Track which categories are expanded
-
-    // Reset local state if the initial list changes (e.g., Firestore update via snapshot)
-    useEffect(() => {
-        setLocalList(JSON.parse(JSON.stringify(initialMasterStockList)));
-        // Initialize all categories as expanded
-        const expanded = {};
-        Object.keys(initialMasterStockList).forEach(cat => { expanded[cat] = true; });
-        setExpandedCategories(expanded);
-    }, [initialMasterStockList]);
