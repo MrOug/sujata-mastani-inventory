@@ -79,8 +79,11 @@ const MASTER_STOCK_LIST = {
   TOPPINGS: [
     'Dry Fruit', 'Pista', 'Badam', 'Pista Powder', 'Cherry'
   ],
+  'ICE CREAM DABBE': [
+    'Ice Cream Dabbe'
+  ],
   MISC: [
-    'Ice Cream Dabee', 'Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container'
+    'Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container'
   ]
 };
 
@@ -264,6 +267,8 @@ const InputField = ({ label, type = 'text', value, onChange, placeholder, minLen
 
 const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     const [newStoreName, setNewStoreName] = useState('');
+    const [newFirmName, setNewFirmName] = useState('');
+    const [newAreaCode, setNewAreaCode] = useState('');
     const [isAdding, setIsAdding] = useState(false);
 
     const handleAddStore = async (e) => {
@@ -271,17 +276,36 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
         setIsAdding(true);
 
         try {
+            // Validate all fields
+            if (!newStoreName.trim()) {
+                throw new Error('Store name is required');
+            }
+            if (!newFirmName.trim()) {
+                throw new Error('Firm name is required');
+            }
+            if (!newAreaCode.trim()) {
+                throw new Error('Area code is required');
+            }
+
             // VALIDATE STORE DATA
-            const validatedStore = validateStoreData({ name: newStoreName });
+            const validatedStore = validateStoreData({ 
+                name: newStoreName,
+                firmName: newFirmName,
+                areaCode: newAreaCode
+            });
 
             const storesColRef = collection(db, `artifacts/${appId}/public/data/stores`);
             await addDoc(storesColRef, {
                 name: validatedStore.name,
+                firmName: newFirmName.trim(),
+                areaCode: newAreaCode.trim(),
                 createdAt: new Date().toISOString()
             });
 
             showToast(`Store "${validatedStore.name}" added successfully!`, 'success');
             setNewStoreName('');
+            setNewFirmName('');
+            setNewAreaCode('');
         } catch (error) {
             console.error("Error adding store:", error);
             showToast(`Failed: ${error.message}`, 'error');
@@ -329,16 +353,30 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
             {/* --- Add Store Form --- */}
             <form onSubmit={handleAddStore} className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-4 max-w-md mx-auto">
                 <InputField
-                    label="New Store Name"
+                    label="Store Name"
                     type="text"
                     value={newStoreName}
                     onChange={(e) => setNewStoreName(e.target.value)}
                     placeholder="e.g., Kothrud Outlet"
                 />
+                <InputField
+                    label="Firm Name"
+                    type="text"
+                    value={newFirmName}
+                    onChange={(e) => setNewFirmName(e.target.value)}
+                    placeholder="e.g., Venkateshwara Hospitality"
+                />
+                <InputField
+                    label="Area Code"
+                    type="text"
+                    value={newAreaCode}
+                    onChange={(e) => setNewAreaCode(e.target.value)}
+                    placeholder="e.g., Kumar Parisar"
+                />
                 <button
                     type="submit"
                     disabled={isAdding}
-                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg shadow-green-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg"
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl shadow-lg shadow-orange-600/40 transition duration-200 disabled:opacity-50 flex items-center justify-center text-lg"
                 >
                     {isAdding ? <Loader className="animate-spin w-5 h-5 mr-2" /> : <Store className="w-5 h-5 mr-2" />}
                     Add New Store
@@ -349,15 +387,20 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
             <div className="pt-4">
                 <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">Current Stores ({Object.keys(stores).length})</h3>
                 <ul className="space-y-2">
-                    {Object.entries(stores).map(([id, name]) => (
+                    {Object.entries(stores).map(([id, storeData]) => (
                         <li key={id} className="p-3 bg-white rounded-lg border border-gray-100 flex justify-between items-center text-gray-900">
-                            <span className="flex-1">{name}</span>
+                            <div className="flex-1">
+                                <div className="font-semibold">{storeData?.name || id}</div>
+                                <div className="text-xs text-gray-500 mt-1">
+                                    {storeData?.firmName && <span className="mr-2">🏢 {storeData.firmName}</span>}
+                                    {storeData?.areaCode && <span>📍 {storeData.areaCode}</span>}
+                                </div>
+                            </div>
                             <div className="flex items-center space-x-3">
-                                <span className="text-xs text-gray-500 bg-gray-100 px-2 py-1 rounded-full hidden sm:inline">{id}</span>
                                 <button
-                                    onClick={() => handleDeleteClick(id, name)}
+                                    onClick={() => handleDeleteClick(id, storeData?.name || id)}
                                     className="p-1 rounded-full text-red-600 hover:bg-red-100 transition duration-150"
-                                    aria-label={`Delete ${name}`}
+                                    aria-label={`Delete ${storeData?.name || id}`}
                                 >
                                     <Trash2 className="w-5 h-5" />
                                 </button>
@@ -683,7 +726,7 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             const ordersColRef = collection(db, `artifacts/${appId}/public/data/orders`);
             await addDoc(ordersColRef, {
                 storeId: selectedStoreId,
-                storeName: stores[selectedStoreId] || selectedStoreId,
+                storeName: stores[selectedStoreId]?.name || selectedStoreId,
                 orderDate: new Date().toISOString(),
                 deliveryDate: nextDayInfo?.date?.toISOString() || new Date().toISOString(),
                 orderQuantities: orderData,
@@ -1000,7 +1043,7 @@ const OrderStatsView = ({ db, appId, selectedStoreId, stores, showToast, masterS
                 <ShoppingCart className="w-6 h-6 mr-3 text-orange-600" /> Order Statistics
             </h2>
             <p className="text-sm text-gray-600">
-                Daily breakdown of ordered items for <span className="font-semibold">{stores[selectedStoreId]}</span>
+                Daily breakdown of ordered items for <span className="font-semibold">{stores[selectedStoreId]?.name}</span>
             </p>
 
             {loading ? (
@@ -1190,7 +1233,7 @@ const OrderHistoryView = ({ db, appId, selectedStoreId, stores, showToast }) => 
                 <ShoppingCart className="w-6 h-6 mr-3 text-orange-600" /> Order History
             </h2>
             <p className="text-sm text-gray-600">
-                View past orders for <span className="font-semibold">{stores[selectedStoreId]}</span>
+                View past orders for <span className="font-semibold">{stores[selectedStoreId]?.name}</span>
             </p>
 
             {loading ? (
@@ -1567,11 +1610,11 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
 
                             <button
                                 type="submit"
-                                disabled={isLoading}
+                disabled={isLoading}
                                 className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
-                            >
+            >
                                 {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Send OTP via WhatsApp'}
-                            </button>
+            </button>
                         </form>
                     ) : (
                         <form onSubmit={handleVerifyOTP} className="space-y-4">
@@ -1871,7 +1914,14 @@ const App = () => {
             try {
                 const newStores = {};
                 snapshot.forEach(doc => {
-                    newStores[doc.id] = doc.data().name;
+                    const data = doc.data();
+                    // Store entire data object for access to firmName, areaCode, etc.
+                    newStores[doc.id] = {
+                        name: data.name,
+                        firmName: data.firmName || data.name,
+                        areaCode: data.areaCode || '',
+                        createdAt: data.createdAt
+                    };
                 });
 
                 console.log("Stores loaded:", Object.keys(newStores).length, "stores");
@@ -2127,7 +2177,7 @@ const App = () => {
             // Confirmation
             const confirmed = await showConfirm({
                 title: 'Confirm Stock Entry',
-                message: `Store: ${stores[selectedStoreId] || selectedStoreId}\nDate: ${selectedDate}\nItems: ${totalItems}\nTotal: ${totalQuantity}\n\nSave?`,
+                message: `Store: ${stores[selectedStoreId]?.name || selectedStoreId}\nDate: ${selectedDate}\nItems: ${totalItems}\nTotal: ${totalQuantity}\n\nSave?`,
                 confirmText: 'Save Stock',
                 cancelText: 'Cancel',
                 confirmColor: 'orange'
@@ -2175,7 +2225,7 @@ const App = () => {
         }
 
         try {
-            const storeName = stores[selectedStoreId] || selectedStoreId;
+            const storeName = stores[selectedStoreId]?.name || selectedStoreId;
             const exportData = {
                 store: storeName,
                 date: selectedDate,
@@ -2221,76 +2271,67 @@ const App = () => {
 
     // 5. Order Output Generation (Admin Action)
     const generateOrderOutput = useCallback(() => {
-        const storeName = stores[selectedStoreId] || selectedStoreId;
-        let output = `${storeName}\n\n`;
+        // Get store details from stores object
+        const storeData = Object.entries(stores).find(([id]) => id === selectedStoreId);
+        const firmName = storeData?.[1]?.firmName || storeData?.[1] || 'Store Name';
+        const areaCode = storeData?.[1]?.areaCode || '';
+        
+        let output = `${firmName}\n\n `;
 
-        const sections = {
-            'MILKSHAKE': [],
-            'ICE CREAM': [],
-            'TOPPINGS': [],
+        // Helper to format items list (no quantities, just names separated by " - ")
+        const formatItemsList = (category) => {
+            const items = masterStockList[category] || [];
+            return items.map(item => item.replace(' (Seasonal)', '')).join(' - ') + ' -';
         };
-        const miscItems = [];
-        const nonOrderedItems = [];
 
-        Object.keys(masterStockList).forEach(category => {
-            masterStockList[category].forEach(item => {
-                const key = `${category}-${item}`; 
-                const quantity = orderQuantities[key] || ''; 
-                if (quantity !== 0 && quantity !== '') {
-                    if (sections[category]) {
-                        sections[category].push(`${item} - ${quantity}`);
-                    } else if (category === 'MISC' && item === 'Ice Cream Dabee') {
-                        miscItems.push(`${item} - ${quantity}`);
-                    }
+        // MILKSHAKE
+        if (masterStockList.MILKSHAKE) {
+            output += `*MILKSHAKE* ${formatItemsList('MILKSHAKE')}\n\n `;
+        }
+
+        // ICE CREAM
+        if (masterStockList['ICE CREAM']) {
+            output += `*ICE CREAM* ${formatItemsList('ICE CREAM')}\n`;
+        }
+
+        // TOPPINGS
+        if (masterStockList.TOPPINGS) {
+            output += ` *TOPPINGS* ${formatItemsList('TOPPINGS')}\n`;
+        }
+
+        // ICE CREAM DABBE - Show the quantity from current stock
+        if (masterStockList['ICE CREAM DABBE']) {
+            masterStockList['ICE CREAM DABBE'].forEach(item => {
+                const key = `ICE CREAM DABBE-${item}`;
+                const quantity = currentStock[key] || orderQuantities[key] || '';
+                if (quantity !== '' && quantity !== 0) {
+                    output += `${item} - ${quantity}\n`;
                 } else {
-                    // Track items that have not been ordered
-                    if (sections[category]) {
-                        nonOrderedItems.push(`${category}: ${item}`);
-                    } else if (category === 'MISC') {
-                        nonOrderedItems.push(`MISC: ${item}`);
+                    output += `${item} - \n`;
+                }
+            });
+        }
+
+        // MISC items (excluding Ice Cream Dabbe)
+        if (masterStockList.MISC) {
+            masterStockList.MISC.forEach(item => {
+                if (item !== 'Ice Cream Dabee') {
+                    const key = `MISC-${item}`;
+                    const quantity = orderQuantities[key] || '';
+                    if (quantity !== '' && quantity !== 0) {
+                        output += `${item} - ${quantity}\n`;
                     }
                 }
             });
-        });
-
-        if (sections.MILKSHAKE.length > 0) {
-            output += `*MILKSHAKE*\n`;
-            output += sections.MILKSHAKE.join('\n');
-            output += '\n\n';
         }
 
-        if (sections['ICE CREAM'].length > 0) {
-            output += `*ICE CREAM*\n`;
-            output += sections['ICE CREAM'].join('\n');
-            output += '\n\n';
-        }
-
-        if (sections.TOPPINGS.length > 0) {
-            output += `*TOPPINGS*\n`;
-            output += sections.TOPPINGS.join('\n');
-            output += '\n\n';
-        }
-
-        if (miscItems.length > 0) {
-             output += miscItems.join('\n');
-             output += '\n\n';
-        }
-
-        // Add non-ordered items section
-        if (nonOrderedItems.length > 0) {
-            output += `*ITEMS NOT ORDERED*\n`;
-            output += nonOrderedItems.join('\n');
-            output += '\n\n';
-        }
-
-        // Output logic for Kumar Parisar only if Venkateshwara Hospitality (store-1) is selected
-        if (selectedStoreId === 'store-1' && stores['store-2']) {
-            output += stores['store-2'];
-            output += '\n';
+        // Add area code at the bottom
+        if (areaCode) {
+            output += `\n${areaCode}`;
         }
 
         return output.trim();
-    }, [orderQuantities, selectedStoreId, stores, masterStockList]);
+    }, [orderQuantities, currentStock, selectedStoreId, stores, masterStockList]);
 
     const handleLogout = async () => {
         if (auth) {
@@ -2498,7 +2539,7 @@ const App = () => {
 
             <div className="space-y-4">
                 {Object.entries(stores).length > 0 ? (
-                    Object.entries(stores).map(([id, name]) => {
+                    Object.entries(stores).map(([id, storeData]) => {
                         const isAssignedToStore = role === 'admin' || userStoreId === id;
                         
                         if (role === 'staff' && userStoreId !== id) return null;
@@ -2515,8 +2556,9 @@ const App = () => {
                                         <Home className="w-5 h-5" />
                                     </div>
                                     <div className="flex-1">
-                                        <p className="font-display text-lg font-bold text-gray-900">{name}</p>
-                                        {role === 'staff' && <span className="text-xs font-semibold text-green-600">Your Assigned Store</span>}
+                                        <p className="font-display text-lg font-bold text-gray-900">{storeData?.name || id}</p>
+                                        {storeData?.firmName && <p className="text-xs text-gray-500 mt-0.5">🏢 {storeData.firmName}</p>}
+                                        {role === 'staff' && <span className="text-xs font-semibold text-green-600 block mt-1">Your Assigned Store</span>}
                                     </div>
                                 </div>
                                 <div className="border-t border-gray-200 mt-3 pt-3">
@@ -2653,7 +2695,7 @@ const App = () => {
             return <HomeView />;
         }
         
-        const storeName = stores[selectedStoreId] || 'Unknown Store';
+        const storeName = stores[selectedStoreId]?.name || 'Unknown Store';
         const isAdmin = role === 'admin';
 
         // Staff access control is now handled in useEffect above
@@ -2830,7 +2872,7 @@ const App = () => {
 
             <header className="sticky top-0 z-10 bg-white/90 backdrop-blur-md shadow-sm p-4 flex justify-between items-center border-b border-gray-200">
                 <h1 className="text-xl font-bold font-display text-gray-900 tracking-wider">
-                    {selectedStoreId ? stores[selectedStoreId] : 'SUJATA MASTANI'}
+                    {selectedStoreId ? stores[selectedStoreId]?.name : 'SUJATA MASTANI'}
                 </h1>
                 <div className="flex items-center space-x-3">
                     {role && (
