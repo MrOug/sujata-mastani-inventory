@@ -558,6 +558,14 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
  * Stock Entry View (For Staff)
  */
 const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving, selectedDate, setSelectedDate, showToast, masterStockList, miscStatus, setMiscStatus }) => {
+    // Log masterStockList on component mount/update
+    useEffect(() => {
+        console.log('📝 StockEntryView received masterStockList:', {
+            categories: Object.keys(masterStockList),
+            itemCounts: Object.keys(masterStockList).map(cat => `${cat}: ${masterStockList[cat].length} items`)
+        });
+    }, [masterStockList]);
+
     const handleSave = async () => {
         try {
             await saveStock();
@@ -2154,26 +2162,39 @@ const App = () => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
                 if (data.list) {
+                    console.log('📋 Master stock list updated from Firestore:', {
+                        categories: Object.keys(data.list),
+                        itemCounts: Object.keys(data.list).map(cat => `${cat}: ${data.list[cat].length} items`),
+                        lastUpdated: data.lastUpdated
+                    });
                     setMasterStockList(data.list);
-                    console.log('Master stock list loaded from Firestore');
                 }
             } else {
                 // If document doesn't exist, create it with the default list
+                console.log('⚠️ Master stock list document does not exist, creating initial list');
                 setDoc(listDocRef, {
                     list: MASTER_STOCK_LIST,
                     lastUpdated: new Date().toISOString()
                 }).then(() => {
-                    console.log('Created initial master stock list in Firestore');
+                    console.log('✅ Created initial master stock list in Firestore');
                 }).catch(error => {
-                    console.error('Error creating master stock list:', error);
+                    console.error('❌ Error creating master stock list:', error);
                 });
             }
         }, (error) => {
-            console.error('Error listening to master stock list:', error);
+            console.error('❌ Error listening to master stock list:', error);
         });
 
         return () => unsubscribeList();
     }, [db, appId, isAuthReady]);
+
+    // Log when masterStockList changes (for debugging)
+    useEffect(() => {
+        console.log('🔄 masterStockList state changed:', {
+            categories: Object.keys(masterStockList),
+            totalItems: Object.values(masterStockList).flat().length
+        });
+    }, [masterStockList]);
 
     // Update helper functions when masterStockList changes
     const getEmptyStockDynamic = useCallback(() => {
@@ -3140,20 +3161,27 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         setIsSavingList(true);
         try {
             // Save to Firestore
+            console.log('💾 Saving master stock list to Firestore:', {
+                categories: Object.keys(localList),
+                itemCounts: Object.keys(localList).map(cat => `${cat}: ${localList[cat].length} items`)
+            });
             const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
             await setDoc(listDocRef, {
                 list: localList,
                 lastUpdated: new Date().toISOString()
             });
 
-            // Call parent callback to update the app state
+            console.log('✅ Master stock list saved successfully to Firestore');
+
+            // Call parent callback to update the app state immediately
             if (onUpdateMasterList) {
+                console.log('📤 Updating parent app state with new list');
                 onUpdateMasterList(localList);
             }
 
             showToast('Master stock list updated successfully!', 'success');
         } catch (error) {
-            console.error('Error saving master stock list:', error);
+            console.error('❌ Error saving master stock list:', error);
             showToast(`Failed to save: ${error.message}`, 'error');
         } finally {
             setIsSavingList(false);
