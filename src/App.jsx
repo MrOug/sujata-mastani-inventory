@@ -722,7 +722,7 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             {/* Weather Forecast Card */}
             {weatherInfo && (
                 <div className="bg-gradient-to-r from-blue-50 to-cyan-50 p-4 rounded-xl shadow-lg border border-blue-200">
-                    <h3 className="text-lg font-bold text-blue-800 mb-2">🌤️ Weather Forecast</h3>
+                    <h3 className="text-lg font-bold text-blue-800 mb-2">🌤️ Weather Forecast for Tomorrow</h3>
                     {loadingWeather ? (
                         <div className="flex items-center gap-2 text-gray-600">
                             <Loader className="animate-spin w-4 h-4" />
@@ -730,6 +730,11 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
                         </div>
                     ) : (
                         <div className="space-y-2">
+                            {nextDayInfo && (
+                                <p className="text-xs font-semibold text-blue-700 mb-1">
+                                    For {nextDayInfo.dateStr} ({nextDayInfo.dayName})
+                                </p>
+                            )}
                             <div className="flex items-center gap-3">
                                 <span className="text-4xl">{weatherInfo.emoji}</span>
                                 <div>
@@ -2142,18 +2147,51 @@ const App = () => {
     // If no user is authenticated, show login screen immediately
     if (!userId || !role) {
         return (
-            <div className="min-h-screen bg-gray-50 flex items-center justify-center p-4">
+            <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 flex items-center justify-center p-4">
                 <div className="w-full max-w-md">
-                    <div className="bg-white rounded-xl shadow-xl border-t-4 border-orange-600 p-6 text-center">
-                        <h1 className="text-3xl font-bold font-display text-orange-600 mb-2">Sujata Mastani</h1>
-                        <p className="text-gray-600 mb-6">Inventory Management System</p>
-                        <p className="text-gray-700 font-medium mb-4">Please log in or register the Super Admin account to access the app features.</p>
-                        <button
-                            onClick={() => setShowAuthModal(true)}
-                            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg transition duration-150 shadow-md flex items-center justify-center text-lg font-display"
-                        >
-                            <User className="w-5 h-5 mr-2" /> Log In / Register
-                        </button>
+                    <div className="bg-white rounded-xl shadow-2xl border-t-4 border-orange-600 p-8 text-center">
+                        {/* Logo/Brand */}
+                        <div className="mb-6">
+                            <div className="w-20 h-20 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                                <Store className="w-10 h-10 text-orange-600" />
+                            </div>
+                            <h1 className="text-4xl font-bold font-display text-orange-600 mb-2">Sujata Mastani</h1>
+                            <p className="text-gray-600 text-lg">Inventory Management</p>
+                        </div>
+
+                        {/* Welcome Message */}
+                        <div className="mb-8">
+                            <p className="text-gray-700 font-medium mb-2">Welcome! 👋</p>
+                            <p className="text-gray-600 text-sm">Please log in to manage your inventory</p>
+                        </div>
+
+                        {/* Action Buttons */}
+                        <div className="space-y-3">
+                            <button
+                                onClick={() => setShowAuthModal(true)}
+                                className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-xl transition duration-150 shadow-lg flex items-center justify-center text-lg font-display group"
+                            >
+                                <User className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
+                                Log In
+                            </button>
+                            
+                            {isFirstUser && (
+                                <button
+                                    onClick={() => setShowAuthModal(true)}
+                                    className="w-full py-4 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl transition duration-150 shadow-lg flex items-center justify-center text-lg font-display group"
+                                >
+                                    <UserPlus className="w-6 h-6 mr-3 group-hover:scale-110 transition-transform" />
+                                    Register Admin
+                                </button>
+                            )}
+                        </div>
+
+                        {/* Info Footer */}
+                        <div className="mt-6 pt-6 border-t border-gray-200">
+                            <p className="text-xs text-gray-500">
+                                Secure • Fast • Reliable
+                            </p>
+                        </div>
                     </div>
                 </div>
                 
@@ -2213,22 +2251,12 @@ const App = () => {
                                     </div>
                                 </div>
                                 <div className="border-t border-gray-200 mt-3 pt-3">
-                                    <div className="flex flex-wrap gap-3">
-                                        <button
-                                            onClick={() => { setSelectedStoreId(id); setView('entry'); }}
-                                            className="flex flex-1 items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700"
-                                        >
-                                            <List className="w-4 h-4 mr-2" /> Stock Entry
-                                        </button>
-                                        {role === 'admin' && (
-                                            <button
-                                                onClick={() => { setSelectedStoreId(id); setView('admin'); }}
-                                                className="flex flex-1 items-center justify-center rounded-lg border border-orange-600/50 bg-white px-4 py-2.5 text-sm font-bold text-orange-600 transition hover:bg-orange-50"
-                                            >
-                                                <User className="w-4 h-4 mr-2" /> Admin Functions
-                                            </button>
-                                        )}
-                                    </div>
+                                    <button
+                                        onClick={() => { setSelectedStoreId(id); setView('entry'); }}
+                                        className="w-full flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700"
+                                    >
+                                        <List className="w-4 h-4 mr-2" /> Open Store
+                                    </button>
                                 </div>
                             </div>
                         );
@@ -2267,41 +2295,6 @@ const App = () => {
         </div>
     );
 
-    // --- Admin Functions View ---
-    const AdminFunctionsView = () => {
-        const storeName = stores[selectedStoreId] || 'Selected Store';
-        
-        const AdminButton = ({ icon: Icon, label, viewName }) => (
-            <button
-                onClick={() => setView(viewName)}
-                className="flex flex-col items-center justify-center p-6 bg-white rounded-xl shadow-lg transition-shadow hover:shadow-xl border-l-4 border-orange-600 text-center w-full"
-            >
-                <div className="flex size-12 shrink-0 items-center justify-center rounded-full bg-orange-100 text-orange-600 mb-3">
-                    <Icon className="w-6 h-6" />
-                </div>
-                <p className="font-display text-lg font-bold text-gray-900">{label}</p>
-            </button>
-        );
-
-        return (
-            <div className="p-4 space-y-6">
-                <div className="text-center p-4 bg-white rounded-xl shadow-lg border-b-4 border-orange-600">
-                    <h2 className="text-2xl font-bold font-display text-gray-900">Admin Functions</h2>
-                    <p className="text-gray-600 text-sm">for {storeName}</p>
-                </div>
-                
-                <div className="grid grid-cols-2 gap-4">
-                    <AdminButton icon={ShoppingCart} label="Order" viewName="order" />
-                    <AdminButton icon={List} label="Order Stats" viewName="orderstats" />
-                    <AdminButton icon={List} label="Order History" viewName="orderhistory" />
-                    <AdminButton icon={TrendingDown} label="Sold Report" viewName="sold" />
-                    <AdminButton icon={UserPlus} label="User Manager" viewName="usermanager" />
-                    <AdminButton icon={Store} label="Store Manager" viewName="storemanager" />
-                    <AdminButton icon={List} label="Item Manager" viewName="itemmanager" />
-                </div>
-            </div>
-        );
-    };
 
     // --- Navigation Bar (Footer) ---
     const NavBar = ({ currentView }) => (
@@ -2323,10 +2316,33 @@ const App = () => {
                     />
                 )}
 
+                {selectedStoreId && role === 'admin' && (
+                    <>
+                        <NavButton
+                            icon={ShoppingCart}
+                            label="Order"
+                            active={currentView === 'order'}
+                            onClick={() => setView('order')}
+                        />
+                        <NavButton
+                            icon={List}
+                            label="History"
+                            active={currentView === 'orderhistory'}
+                            onClick={() => setView('orderhistory')}
+                        />
+                        <NavButton
+                            icon={TrendingDown}
+                            label="Sold"
+                            active={currentView === 'sold'}
+                            onClick={() => setView('sold')}
+                        />
+                    </>
+                )}
+                
                 {role === 'admin' && (
                     <>
                         <NavButton
-                            icon={Store} // New Store Management Button
+                            icon={Store}
                             label="Stores"
                             active={currentView === 'storemanager'}
                             onClick={() => setView('storemanager')}
@@ -2343,23 +2359,6 @@ const App = () => {
                             active={currentView === 'itemmanager'}
                             onClick={() => setView('itemmanager')}
                         />
-                        
-                        {selectedStoreId && (
-                            <>
-                                <NavButton
-                                    icon={TrendingDown}
-                                    label="Sold"
-                                    active={currentView === 'sold'}
-                                    onClick={() => setView('sold')}
-                                />
-                                <NavButton
-                                    icon={ShoppingCart}
-                                    label="Order"
-                                    active={currentView === 'order'}
-                                    onClick={() => setView('order')}
-                                />
-                            </>
-                        )}
                     </>
                 )}
             </nav>
@@ -2390,9 +2389,6 @@ const App = () => {
 
         // Staff access control is now handled in useEffect above
         switch (view) {
-            case 'admin': // ADD THIS NEW CASE
-                if (!isAdmin) return <HomeView />;
-                return <AdminFunctionsView />;
             case 'storemanager':
                 if (!isAdmin) return <HomeView />;
                 return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
