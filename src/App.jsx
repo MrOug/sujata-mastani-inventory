@@ -1319,15 +1319,15 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
         setIsLoading(true);
 
         if (password.length < 6) {
-            setError("Password must be at least 6 characters.");
-            setIsLoading(false);
-            return;
+             setError("Password must be at least 6 characters.");
+             setIsLoading(false);
+             return;
         }
 
         try {
             const fakeEmail = `${username.toLowerCase().trim()}@sujata-mastani-inventory.local`;
-            const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, password);
-            onLoginSuccess(userCredential.user, username.trim());
+                const userCredential = await signInWithEmailAndPassword(auth, fakeEmail, password);
+                onLoginSuccess(userCredential.user, username.trim());
         } catch (err) {
             console.error("Login Error:", err);
             setError(err.message.includes('user-not-found') || err.message.includes('wrong-password') 
@@ -1339,61 +1339,61 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 to-yellow-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
-                <div className="bg-white rounded-2xl shadow-2xl p-8">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
                     {/* Logo */}
                     <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-orange-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <User className="w-8 h-8 text-orange-600" />
+                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                            <User className="w-10 h-10 text-white" />
                         </div>
                         <h1 className="text-3xl font-bold font-display text-orange-600">Login</h1>
-                        <p className="text-gray-600 mt-2">Welcome back!</p>
+                        <p className="text-gray-600 mt-2">Welcome back to Sujata Mastani!</p>
                     </div>
 
-                    <form onSubmit={handleSubmit} className="space-y-4">
+            <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
-                            <input
-                                type="text"
-                                value={username}
-                                onChange={(e) => setUsername(e.target.value)}
-                                required
+                    <input
+                        type="text"
+                        value={username}
+                        onChange={(e) => setUsername(e.target.value)}
+                        required
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition"
                                 placeholder="Enter your username"
-                            />
-                        </div>
+                    />
+                </div>
 
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Password</label>
-                            <input
-                                type="password"
-                                value={password}
-                                onChange={(e) => setPassword(e.target.value)}
-                                required
-                                minLength="6"
+                    <input
+                        type="password"
+                        value={password}
+                        onChange={(e) => setPassword(e.target.value)}
+                        required
+                        minLength="6"
                                 className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition"
                                 placeholder="Enter your password"
-                            />
-                        </div>
-
+                    />
+                </div>
+                
                         {error && (
                             <div className="p-3 bg-red-50 border border-red-200 rounded-lg">
                                 <p className="text-red-600 text-sm">{error}</p>
                             </div>
                         )}
 
-                        <button
-                            type="submit"
-                            disabled={isLoading}
+                <button
+                    type="submit"
+                    disabled={isLoading}
                             className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
-                        >
+                >
                             {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Log In'}
-                        </button>
-                    </form>
-
+                </button>
+            </form>
+            
                     <div className="mt-6 text-center">
-                        <button
+            <button
                             onClick={onSwitchToRegister}
                             className="text-orange-600 hover:text-orange-700 font-medium text-sm"
                         >
@@ -1419,6 +1419,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
     const [otpTimestamp, setOtpTimestamp] = useState(null);
     const [error, setError] = useState('');
     const [isLoading, setIsLoading] = useState(false);
+    const [devModeOTP, setDevModeOTP] = useState(''); // For displaying OTP in dev mode
 
     const handleRequestOTP = async (e) => {
         e.preventDefault();
@@ -1449,6 +1450,10 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
             if (result.success) {
                 setStep(2);
                 setError('');
+                // Store OTP for dev mode display
+                if (result.isDevelopment) {
+                    setDevModeOTP(newOTP);
+                }
             } else {
                 setError('Failed to send OTP. Please try again.');
             }
@@ -1496,15 +1501,15 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-green-50 to-blue-50 flex items-center justify-center p-4">
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
             <div className="w-full max-w-md">
-                <div className="bg-white rounded-2xl shadow-2xl p-8">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
                     {/* Logo */}
                     <div className="text-center mb-8">
-                        <div className="w-16 h-16 bg-green-100 rounded-full flex items-center justify-center mx-auto mb-4">
-                            <UserPlus className="w-8 h-8 text-green-600" />
+                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                            <UserPlus className="w-10 h-10 text-white" />
                         </div>
-                        <h1 className="text-3xl font-bold font-display text-green-600">Register Admin</h1>
+                        <h1 className="text-3xl font-bold font-display text-orange-600">Register Admin</h1>
                         <p className="text-gray-600 mt-2">Step {step} of 2</p>
                     </div>
 
@@ -1517,7 +1522,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                                     value={username}
                                     onChange={(e) => setUsername(e.target.value)}
                                     required
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition"
                                     placeholder="Choose a username"
                                 />
                             </div>
@@ -1530,7 +1535,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                                     onChange={(e) => setPassword(e.target.value)}
                                     required
                                     minLength="6"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition"
                                     placeholder="Min 6 characters"
                                 />
                             </div>
@@ -1543,14 +1548,14 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                                     onChange={(e) => setConfirmPassword(e.target.value)}
                                     required
                                     minLength="6"
-                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition"
+                                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition"
                                     placeholder="Re-enter password"
                                 />
                             </div>
 
-                            <div className="p-3 bg-blue-50 border border-blue-200 rounded-lg">
-                                <p className="text-sm text-blue-800">
-                                    📱 OTP will be sent to: <strong>+91 99224 22233</strong>
+                            <div className="p-3 bg-orange-50 border border-orange-200 rounded-lg">
+                                <p className="text-sm text-orange-800">
+                                    📱 OTP will be sent via WhatsApp to: <strong>+91 99224 22233</strong>
                                 </p>
                             </div>
 
@@ -1563,17 +1568,29 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                             <button
                                 type="submit"
                                 disabled={isLoading}
-                                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
+                                className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
                             >
-                                {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Send OTP'}
+                                {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Send OTP via WhatsApp'}
                             </button>
                         </form>
                     ) : (
                         <form onSubmit={handleVerifyOTP} className="space-y-4">
                             <div className="text-center mb-6">
-                                <p className="text-gray-700 mb-2">OTP sent to:</p>
-                                <p className="text-lg font-bold text-green-600">+91 99224 22233</p>
+                                <p className="text-gray-700 mb-2">OTP sent via WhatsApp to:</p>
+                                <p className="text-lg font-bold text-orange-600">+91 99224 22233</p>
                                 <p className="text-sm text-gray-500 mt-2">Valid for 5 minutes</p>
+                                
+                                {devModeOTP ? (
+                                    <div className="mt-3 p-4 bg-gradient-to-r from-orange-100 to-yellow-100 border-2 border-orange-400 rounded-lg">
+                                        <p className="text-xs text-orange-800 font-semibold mb-2">🔓 DEVELOPMENT MODE</p>
+                                        <p className="text-2xl font-bold text-orange-600 tracking-widest">{devModeOTP}</p>
+                                        <p className="text-xs text-orange-700 mt-2">Copy this OTP above ⬆️</p>
+                                    </div>
+                                ) : (
+                                    <div className="mt-3 p-2 bg-orange-50 rounded-lg">
+                                        <p className="text-xs text-orange-700">💡 Check your WhatsApp messages</p>
+                                    </div>
+                                )}
                             </div>
 
                             <div>
@@ -1584,7 +1601,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                                     onChange={(e) => setOtp(e.target.value.replace(/\D/g, '').slice(0, 6))}
                                     required
                                     maxLength="6"
-                                    className="w-full p-4 text-center text-2xl font-bold border-2 border-gray-300 rounded-lg focus:ring-2 focus:ring-green-600 focus:border-green-600 transition tracking-widest"
+                                    className="w-full p-4 text-center text-2xl font-bold border-2 border-orange-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600 transition tracking-widest"
                                     placeholder="000000"
                                 />
                             </div>
@@ -1598,7 +1615,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                             <button
                                 type="submit"
                                 disabled={isLoading || otp.length !== 6}
-                                className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
+                                className="w-full py-3 bg-gradient-to-r from-orange-500 to-orange-600 hover:from-orange-600 hover:to-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
                             >
                                 {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Verify & Register'}
                             </button>
@@ -1616,7 +1633,7 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                     <div className="mt-6 text-center">
                         <button
                             onClick={onSwitchToLogin}
-                            className="text-green-600 hover:text-green-700 font-medium text-sm"
+                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
                         >
                             Already have an account? Log In
                         </button>
@@ -1672,6 +1689,13 @@ const App = () => {
     const [orderQuantities, setOrderQuantities] = useState(getEmptyStock());
     const [selectedDate, setSelectedDate] = useState(getTodayDate()); // Date selector for stock entry
     const [masterStockList, setMasterStockList] = useState(MASTER_STOCK_LIST); // Dynamic stock list
+    
+    // Auto-switch to register screen if it's the first user
+    useEffect(() => {
+        if (isFirstUser && authScreen === 'login') {
+            setAuthScreen('register');
+        }
+    }, [isFirstUser, authScreen]);
     
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
@@ -2433,17 +2457,11 @@ const App = () => {
 
     // If no user is authenticated, show login or register screen
     if (!userId || !role) {
-        // Auto-switch to register screen if it's the first user (only when not already on register)
-        if (isFirstUser && authScreen === 'login') {
-            // Use setTimeout to avoid state updates during render
-            setTimeout(() => setAuthScreen('register'), 0);
-        }
-
         if (authScreen === 'register') {
-            return (
+        return (
                 <RegisterScreen
-                    auth={auth}
-                    onLoginSuccess={handleAuthSuccess}
+                        auth={auth} 
+                        onLoginSuccess={handleAuthSuccess}
                     onSwitchToLogin={() => setAuthScreen('login')}
                 />
             );
@@ -2502,12 +2520,12 @@ const App = () => {
                                     </div>
                                 </div>
                                 <div className="border-t border-gray-200 mt-3 pt-3">
-                                    <button
-                                        onClick={() => { setSelectedStoreId(id); setView('entry'); }}
+                                        <button
+                                            onClick={() => { setSelectedStoreId(id); setView('entry'); }}
                                         className="w-full flex items-center justify-center rounded-lg bg-orange-600 px-4 py-2.5 text-sm font-bold text-white shadow-lg transition hover:bg-orange-700"
-                                    >
+                                        >
                                         <List className="w-4 h-4 mr-2" /> Open Store
-                                    </button>
+                                        </button>
                                 </div>
                             </div>
                         );
@@ -2589,7 +2607,7 @@ const App = () => {
                         />
                     </>
                 )}
-                
+
                 {role === 'admin' && (
                     <>
                         <NavButton
@@ -2604,7 +2622,7 @@ const App = () => {
                             active={currentView === 'usermanager'}
                             onClick={() => setView('usermanager')}
                         />
-                        <NavButton
+                                <NavButton
                             icon={List}
                             label="Items"
                             active={currentView === 'itemmanager'}
