@@ -754,9 +754,14 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
                                 </div>
                             )}
                             
+                            {weatherInfo.success && (
+                                <p className="text-xs text-gray-500 mt-2">
+                                    ℹ️ Data from Open-Meteo (IMD & Global Met Services)
+                                </p>
+                            )}
                             {!weatherInfo.success && (
                                 <p className="text-xs text-gray-500 mt-2">
-                                    ℹ️ Using estimated weather data. Add OpenWeatherMap API key for live data.
+                                    ℹ️ Using estimated weather data. Service temporarily unavailable.
                                 </p>
                             )}
                         </div>
