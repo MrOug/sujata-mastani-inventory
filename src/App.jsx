@@ -2431,15 +2431,14 @@ const App = () => {
         );
     }
 
-    // Auto-switch to register screen if it's the first user
-    useEffect(() => {
-        if (isFirstUser && authScreen === 'login') {
-            setAuthScreen('register');
-        }
-    }, [isFirstUser, authScreen]);
-
     // If no user is authenticated, show login or register screen
     if (!userId || !role) {
+        // Auto-switch to register screen if it's the first user (only when not already on register)
+        if (isFirstUser && authScreen === 'login') {
+            // Use setTimeout to avoid state updates during render
+            setTimeout(() => setAuthScreen('register'), 0);
+        }
+
         if (authScreen === 'register') {
             return (
                 <RegisterScreen
