@@ -2278,10 +2278,15 @@ const App = () => {
         
         let output = `${firmName}\n`;
 
-        // Helper to format items list - each item on its own line with " - " at the end
+        // Helper to format items list - each item on its own line with quantity or empty
         const formatItemsList = (category) => {
             const items = masterStockList[category] || [];
-            return items.map(item => `${item.replace(' (Seasonal)', '')} - `).join('\n');
+            return items.map(item => {
+                const key = `${category}-${item}`;
+                const quantity = orderQuantities[key] || '';
+                const cleanItem = item.replace(' (Seasonal)', '');
+                return quantity ? `${cleanItem} - ${quantity}` : `${cleanItem} - `;
+            }).join('\n');
         };
 
         // MILKSHAKE
@@ -2304,8 +2309,8 @@ const App = () => {
             output += '\n';
             masterStockList['ICE CREAM DABBE'].forEach(item => {
                 const key = `ICE CREAM DABBE-${item}`;
-                const quantity = currentStock[key] || orderQuantities[key] || '';
-                output += `${item} - \n`;
+                const quantity = orderQuantities[key] || '';
+                output += quantity ? `${item} - ${quantity}\n` : `${item} - \n`;
             });
         }
 
@@ -2316,7 +2321,7 @@ const App = () => {
                     const key = `MISC-${item}`;
                     const quantity = orderQuantities[key] || '';
                     if (quantity !== '' && quantity !== 0) {
-                        output += `${item} - \n`;
+                        output += `${item} - ${quantity}\n`;
                     }
                 }
             });
