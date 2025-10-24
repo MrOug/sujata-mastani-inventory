@@ -1,159 +1,259 @@
 <!DOCTYPE html>
-<html>
+<html lang="en">
 <head>
-    <title>Generate App Icons</title>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Generate SM Icons</title>
     <style>
         body {
             font-family: Arial, sans-serif;
-            max-width: 800px;
-            margin: 50px auto;
             padding: 20px;
             background: #f5f5f5;
         }
         .container {
+            max-width: 800px;
+            margin: 0 auto;
             background: white;
             padding: 30px;
             border-radius: 10px;
             box-shadow: 0 2px 10px rgba(0,0,0,0.1);
         }
-        h1 { color: #ea580c; }
-        .icon-preview {
+        h1 {
+            color: #ea580c;
+            text-align: center;
+        }
+        .preview {
             display: flex;
             gap: 20px;
+            flex-wrap: wrap;
+            justify-content: center;
             margin: 30px 0;
+        }
+        .preview-item {
+            text-align: center;
         }
         canvas {
             border: 1px solid #ddd;
-            border-radius: 8px;
+            border-radius: 10px;
+            box-shadow: 0 2px 5px rgba(0,0,0,0.1);
+        }
+        .size-label {
+            margin-top: 10px;
+            font-size: 14px;
+            color: #666;
         }
         button {
-            background: #ea580c;
+            display: block;
+            width: 100%;
+            padding: 15px;
+            background: linear-gradient(135deg, #ea580c 0%, #f97316 100%);
             color: white;
             border: none;
-            padding: 12px 24px;
-            border-radius: 6px;
-            cursor: pointer;
+            border-radius: 8px;
             font-size: 16px;
-            margin: 5px;
+            font-weight: bold;
+            cursor: pointer;
+            margin-top: 20px;
         }
-        button:hover { background: #c2410c; }
+        button:hover {
+            background: linear-gradient(135deg, #c2410c 0%, #ea580c 100%);
+        }
         .instructions {
-            background: #fff7ed;
-            border-left: 4px solid #ea580c;
-            padding: 15px;
-            margin: 20px 0;
+            margin-top: 30px;
+            padding: 20px;
+            background: #fef3c7;
+            border-left: 4px solid #f59e0b;
+            border-radius: 5px;
+        }
+        .instructions h3 {
+            margin-top: 0;
+            color: #92400e;
+        }
+        .instructions ol {
+            margin: 10px 0;
+            padding-left: 20px;
+        }
+        .instructions li {
+            margin: 8px 0;
+            color: #78350f;
         }
     </style>
 </head>
 <body>
     <div class="container">
-        <h1>📱 Generate PWA Icons</h1>
-        <p>Click the buttons below to download icons for your mobile app:</p>
+        <h1>🎨 Sujata Mastani Icon Generator</h1>
+        <p style="text-align: center; color: #666;">Generate beautiful home screen icons for iOS and Android</p>
         
-        <div class="icon-preview">
-            <div>
-                <h3>192x192 Icon</h3>
-                <canvas id="icon192" width="192" height="192"></canvas>
-                <br>
-                <button onclick="downloadIcon('icon192', 'icon-192.png')">Download 192x192</button>
+        <div class="preview">
+            <div class="preview-item">
+                <canvas id="icon192"></canvas>
+                <div class="size-label">192x192 (Android)</div>
             </div>
-            <div>
-                <h3>512x512 Icon</h3>
-                <canvas id="icon512" width="512" height="512"></canvas>
-                <br>
-                <button onclick="downloadIcon('icon512', 'icon-512.png')">Download 512x512</button>
+            <div class="preview-item">
+                <canvas id="icon512"></canvas>
+                <div class="size-label">512x512 (High-res)</div>
             </div>
         </div>
 
+        <button onclick="downloadIcons()">📥 Download All Icons</button>
+
         <div class="instructions">
-            <h3>📝 Instructions:</h3>
+            <h3>📋 Next Steps:</h3>
             <ol>
-                <li>Click both download buttons above</li>
-                <li>Save the files to the <code>public/</code> folder in your project</li>
-                <li>The icons will be used when you add the app to your home screen</li>
+                <li>Click "Download All Icons" button above</li>
+                <li>Save the icons to your <code>public/</code> folder</li>
+                <li>The manifest.json is already configured</li>
+                <li>Deploy to Vercel</li>
+                <li>Add to home screen on your phone! 📱</li>
             </ol>
-            <p><strong>Optional:</strong> You can create custom icons in any image editor and replace these files.</p>
         </div>
     </div>
 
     <script>
-        function drawIcon(canvasId) {
-            const canvas = document.getElementById(canvasId);
+        function createIcon(size) {
+            const canvas = document.getElementById(`icon${size}`);
+            canvas.width = size;
+            canvas.height = size;
             const ctx = canvas.getContext('2d');
-            const size = canvas.width;
-            
-            // Background gradient
+
+            // Create gradient background (Orange to Yellow)
             const gradient = ctx.createLinearGradient(0, 0, size, size);
-            gradient.addColorStop(0, '#ea580c');
-            gradient.addColorStop(1, '#fb923c');
+            gradient.addColorStop(0, '#ea580c');    // Orange
+            gradient.addColorStop(0.5, '#f97316');  // Bright Orange
+            gradient.addColorStop(1, '#fbbf24');    // Yellow
             ctx.fillStyle = gradient;
             ctx.fillRect(0, 0, size, size);
-            
-            // Draw ice cream cone icon
-            ctx.fillStyle = 'white';
-            
-            // Ice cream scoops
-            const centerX = size / 2;
-            const baseY = size * 0.7;
-            const radius = size * 0.12;
-            
-            // Bottom scoop
+
+            // Add subtle pattern/texture
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
             ctx.beginPath();
-            ctx.arc(centerX, baseY - radius, radius, 0, Math.PI * 2);
+            ctx.arc(size * 0.3, size * 0.3, size * 0.4, 0, Math.PI * 2);
             ctx.fill();
             
-            // Middle scoop
+            ctx.fillStyle = 'rgba(251, 146, 60, 0.1)';
             ctx.beginPath();
-            ctx.arc(centerX - radius * 0.5, baseY - radius * 2.5, radius, 0, Math.PI * 2);
+            ctx.arc(size * 0.7, size * 0.7, size * 0.5, 0, Math.PI * 2);
             ctx.fill();
-            
-            // Top scoop
-            ctx.beginPath();
-            ctx.arc(centerX + radius * 0.5, baseY - radius * 2.5, radius, 0, Math.PI * 2);
-            ctx.fill();
-            
-            // Cone
-            ctx.beginPath();
-            ctx.moveTo(centerX - radius * 0.8, baseY);
-            ctx.lineTo(centerX + radius * 0.8, baseY);
-            ctx.lineTo(centerX, baseY + radius * 2.5);
-            ctx.closePath();
-            ctx.fillStyle = '#fbbf24';
-            ctx.fill();
-            
-            // Cone pattern
-            ctx.strokeStyle = '#f59e0b';
-            ctx.lineWidth = size * 0.005;
-            for (let i = 0; i < 5; i++) {
-                const y = baseY + (radius * 2.5 / 5) * i;
-                const width = (radius * 0.8) * (1 - i / 5) * 2;
-                ctx.beginPath();
-                ctx.moveTo(centerX - width / 2, y);
-                ctx.lineTo(centerX + width / 2, y);
-                ctx.stroke();
-            }
-            
-            // Text
-            ctx.fillStyle = 'white';
-            ctx.font = `bold ${size * 0.12}px Arial`;
+
+            // Draw "SM" text
             ctx.textAlign = 'center';
-            ctx.fillText('SM', centerX, size * 0.25);
+            ctx.textBaseline = 'middle';
+            
+            // White shadow for depth
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = size * 0.02;
+            ctx.shadowOffsetY = size * 0.01;
+            
+            // Main text - White
+            ctx.fillStyle = '#ffffff';
+            ctx.font = `bold ${size * 0.45}px Arial, sans-serif`;
+            ctx.fillText('SM', size / 2, size / 2);
+
+            // Add a subtle inner shadow effect
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = size * 0.008;
+            ctx.strokeText('SM', size / 2, size / 2);
+
+            // Add border/frame
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = size * 0.02;
+            ctx.strokeRect(size * 0.05, size * 0.05, size * 0.9, size * 0.9);
         }
 
-        function downloadIcon(canvasId, filename) {
-            const canvas = document.getElementById(canvasId);
+        // Generate icons on page load
+        createIcon(192);
+        createIcon(512);
+
+        function downloadCanvas(canvas, filename) {
             const link = document.createElement('a');
             link.download = filename;
             link.href = canvas.toDataURL('image/png');
             link.click();
         }
 
-        // Draw icons on page load
-        window.onload = () => {
-            drawIcon('icon192');
-            drawIcon('icon512');
-        };
+        function downloadIcons() {
+            // Download both sizes
+            downloadCanvas(document.getElementById('icon192'), 'icon-192x192.png');
+            
+            // Small delay to ensure both downloads work
+            setTimeout(() => {
+                downloadCanvas(document.getElementById('icon512'), 'icon-512x512.png');
+            }, 500);
+
+            // Create and download apple-touch-icon (180x180)
+            const appleCanvas = document.createElement('canvas');
+            appleCanvas.width = 180;
+            appleCanvas.height = 180;
+            const ctx = appleCanvas.getContext('2d');
+            
+            // Same design for apple icon
+            const gradient = ctx.createLinearGradient(0, 0, 180, 180);
+            gradient.addColorStop(0, '#ea580c');
+            gradient.addColorStop(0.5, '#f97316');
+            gradient.addColorStop(1, '#fbbf24');
+            ctx.fillStyle = gradient;
+            ctx.fillRect(0, 0, 180, 180);
+
+            ctx.fillStyle = 'rgba(255, 255, 255, 0.05)';
+            ctx.beginPath();
+            ctx.arc(54, 54, 72, 0, Math.PI * 2);
+            ctx.fill();
+            
+            ctx.fillStyle = 'rgba(251, 146, 60, 0.1)';
+            ctx.beginPath();
+            ctx.arc(126, 126, 90, 0, Math.PI * 2);
+            ctx.fill();
+
+            ctx.shadowColor = 'rgba(0, 0, 0, 0.3)';
+            ctx.shadowBlur = 3.6;
+            ctx.shadowOffsetY = 1.8;
+            ctx.fillStyle = '#ffffff';
+            ctx.font = 'bold 81px Arial, sans-serif';
+            ctx.textAlign = 'center';
+            ctx.textBaseline = 'middle';
+            ctx.fillText('SM', 90, 90);
+
+            ctx.shadowColor = 'transparent';
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.5)';
+            ctx.lineWidth = 1.44;
+            ctx.strokeText('SM', 90, 90);
+
+            ctx.strokeStyle = 'rgba(255, 255, 255, 0.2)';
+            ctx.lineWidth = 3.6;
+            ctx.strokeRect(9, 9, 162, 162);
+
+            setTimeout(() => {
+                downloadCanvas(appleCanvas, 'apple-touch-icon.png');
+            }, 1000);
+
+            // Create favicon (32x32)
+            const faviconCanvas = document.createElement('canvas');
+            faviconCanvas.width = 32;
+            faviconCanvas.height = 32;
+            const fctx = faviconCanvas.getContext('2d');
+            
+            const fgradient = fctx.createLinearGradient(0, 0, 32, 32);
+            fgradient.addColorStop(0, '#ea580c');
+            fgradient.addColorStop(1, '#fbbf24');
+            fctx.fillStyle = fgradient;
+            fctx.fillRect(0, 0, 32, 32);
+
+            fctx.fillStyle = '#ffffff';
+            fctx.font = 'bold 18px Arial, sans-serif';
+            fctx.textAlign = 'center';
+            fctx.textBaseline = 'middle';
+            fctx.fillText('SM', 16, 16);
+
+            setTimeout(() => {
+                const link = document.createElement('a');
+                link.download = 'favicon.ico';
+                link.href = faviconCanvas.toDataURL('image/png');
+                link.click();
+            }, 1500);
+
+            alert('✅ Icons downloaded! Save them to the public/ folder:\n\n• icon-192x192.png\n• icon-512x512.png\n• apple-touch-icon.png\n• favicon.ico');
+        }
     </script>
 </body>
 </html>
-
