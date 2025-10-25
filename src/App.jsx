@@ -64,6 +64,15 @@ console.log('Firebase Config Loaded:', {
 
 const initialAuthToken = typeof __initial_auth_token !== 'undefined' ? __initial_auth_token : null; 
 
+// --- Ordered List of Categories ---
+const CATEGORY_ORDER = [
+  'MILKSHAKE',
+  'ICE CREAM',
+  'TOPPINGS',
+  'ICE CREAM DABBE',
+  'MISC'
+];
+
 // The main list of stock items based on your paper and required output format
 const MASTER_STOCK_LIST = {
   MILKSHAKE: [
@@ -91,11 +100,13 @@ const MASTER_STOCK_LIST = {
 
 const getEmptyStock = () => {
   const stock = {};
-  Object.keys(MASTER_STOCK_LIST).forEach(category => {
-    MASTER_STOCK_LIST[category].forEach(item => {
-      const key = `${category}-${item}`; 
-      stock[key] = 0;
-    });
+  CATEGORY_ORDER.forEach(category => {
+    if (MASTER_STOCK_LIST[category]) {
+      MASTER_STOCK_LIST[category].forEach(item => {
+        const key = `${category}-${item}`; 
+        stock[key] = 0;
+      });
+    }
   });
   return stock;
 };
@@ -612,60 +623,64 @@ const StockEntryView = ({ storeId, stockData, setStockData, saveStock, isSaving,
             </div>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).map(category => (
-                    // Updated section styling for Stitch UI
-                    <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
-                        <div className="space-y-2">
-                            {masterStockList[category].map(item => {
-                                const key = `${category}-${item}`;
-                                
-                                // For MISC items, show Available/Low Stock buttons
-                                if (category === 'MISC') {
-                                    return (
-                                        <div key={key} className="flex items-center justify-between p-3 bg-white rounded-lg mb-2 border border-gray-100">
-                                            <label className="text-sm font-medium text-gray-800 w-1/2">{item}</label>
-                                            <div className="flex gap-2">
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'available' }))}
-                                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
-                                                        miscStatus[key] === 'available'
-                                                            ? 'bg-green-600 text-white shadow-md'
-                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                    }`}
-                                                >
-                                                    Available
-                                                </button>
-                                                <button
-                                                    type="button"
-                                                    onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'low' }))}
-                                                    className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
-                                                        miscStatus[key] === 'low'
-                                                            ? 'bg-red-600 text-white shadow-md'
-                                                            : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
-                                                    }`}
-                                                >
-                                                    Low Stock
-                                                </button>
+                {CATEGORY_ORDER.map(category => {
+                    const itemsInCategory = masterStockList[category] || [];
+                    if (itemsInCategory.length === 0) return null;
+
+                    return (
+                        <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                            <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
+                            <div className="space-y-2">
+                                {itemsInCategory.map(item => {
+                                    const key = `${category}-${item}`;
+                                    
+                                    // For MISC items, show Available/Low Stock buttons
+                                    if (category === 'MISC') {
+                                        return (
+                                            <div key={key} className="flex items-center justify-between p-3 bg-white rounded-lg mb-2 border border-gray-100">
+                                                <label className="text-sm font-medium text-gray-800 w-1/2">{item}</label>
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'available' }))}
+                                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
+                                                            miscStatus[key] === 'available'
+                                                                ? 'bg-green-600 text-white shadow-md'
+                                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                        }`}
+                                                    >
+                                                        Available
+                                                    </button>
+                                                    <button
+                                                        type="button"
+                                                        onClick={() => setMiscStatus(prev => ({ ...prev, [key]: 'low' }))}
+                                                        className={`px-4 py-2 rounded-lg font-medium text-sm transition ${
+                                                            miscStatus[key] === 'low'
+                                                                ? 'bg-red-600 text-white shadow-md'
+                                                                : 'bg-gray-200 text-gray-700 hover:bg-gray-300'
+                                                        }`}
+                                                    >
+                                                        Low Stock
+                                                    </button>
+                                                </div>
                                             </div>
-                                        </div>
+                                        );
+                                    }
+                                    
+                                    // For other categories, show regular input
+                                    return (
+                                        <StockInput
+                                            key={key}
+                                            label={item}
+                                            value={stockData[key]}
+                                            onChange={(value) => setStockData(prev => ({ ...prev, [key]: value }))}
+                                        />
                                     );
-                                }
-                                
-                                // For other categories, show regular input
-                                return (
-                                    <StockInput
-                                        key={key}
-                                        label={item}
-                                        value={stockData[key]}
-                                        onChange={(value) => setStockData(prev => ({ ...prev, [key]: value }))}
-                                    />
-                                );
-                            })}
+                                })}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
 
             <button
@@ -701,40 +716,45 @@ const StockSoldView = ({ currentStock, yesterdayStock, calculateSold, soldStockS
             </p>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).map(category => (
-                    <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <h3 className="text-lg font-bold text-red-600 border-b border-red-200 pb-2 mb-3">{category}</h3>
-                        <div className="space-y-2">
-                            {masterStockList[category].map(item => {
-                                const key = `${category}-${item}`; 
-                                const sold = calculateSold(category, item);
-                                const current = currentStock[key] || 0;
-                                const yesterday = yesterdayStock[key] || 0;
+                {CATEGORY_ORDER.map(category => {
+                    const itemsInCategory = masterStockList[category] || [];
+                    if (itemsInCategory.length === 0) return null;
 
-                                // Styling based on sale status
-                                const isLoss = sold < 0;
-                                const cardClass = isLoss ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
-                                const soldColor = isLoss ? 'text-red-700' : 'text-orange-600';
+                    return (
+                        <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
+                            <h3 className="text-lg font-bold text-red-600 border-b border-red-200 pb-2 mb-3">{category}</h3>
+                            <div className="space-y-2">
+                                {itemsInCategory.map(item => {
+                                    const key = `${category}-${item}`; 
+                                    const sold = calculateSold(category, item);
+                                    const current = currentStock[key] || 0;
+                                    const yesterday = yesterdayStock[key] || 0;
 
-                                return (
-                                    <div 
-                                        key={key} 
-                                        className={`flex items-center justify-between p-3 rounded-lg border ${cardClass}`}
-                                    >
-                                        <div className="flex-1">
-                                            <p className="text-base font-semibold text-gray-900">{item}</p>
-                                            <p className="text-xs text-gray-500">Yst: {yesterday} | Cur: {current}</p>
+                                    // Styling based on sale status
+                                    const isLoss = sold < 0;
+                                    const cardClass = isLoss ? 'bg-red-50 border-red-200' : 'bg-gray-50 border-gray-200';
+                                    const soldColor = isLoss ? 'text-red-700' : 'text-orange-600';
+
+                                    return (
+                                        <div 
+                                            key={key} 
+                                            className={`flex items-center justify-between p-3 rounded-lg border ${cardClass}`}
+                                        >
+                                            <div className="flex-1">
+                                                <p className="text-base font-semibold text-gray-900">{item}</p>
+                                                <p className="text-xs text-gray-500">Yst: {yesterday} | Cur: {current}</p>
+                                            </div>
+                                            <div className="shrink-0 text-right">
+                                                <p className={`text-2xl font-bold font-display ${soldColor}`}>{sold}</p>
+                                                <p className="text-xs text-gray-500">{isLoss ? 'LOSS/ERROR' : 'SOLD'}</p>
+                                            </div>
                                         </div>
-                                        <div className="shrink-0 text-right">
-                                            <p className={`text-2xl font-bold font-display ${soldColor}`}>{sold}</p>
-                                            <p className="text-xs text-gray-500">{isLoss ? 'LOSS/ERROR' : 'SOLD'}</p>
-                                        </div>
-                                    </div>
-                                );
-                            })}
+                                    );
+                                })}
+                            </div>
                         </div>
-                    </div>
-                ))}
+                    );
+                })}
             </div>
         </div>
     );
@@ -911,15 +931,15 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             </p>
 
             <div className="space-y-4">
-                {Object.keys(masterStockList).map(category => {
-                    // Skip MISC category - handle it separately below
-                    if (category === 'MISC') return null;
-                    
+                {CATEGORY_ORDER.map(category => {
+                    const itemsInCategory = masterStockList[category] || [];
+                    if (itemsInCategory.length === 0) return null;
+
                     return (
                         <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
                             <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category} (Order Qty)</h3>
                             <div className="space-y-2">
-                                {masterStockList[category].map(item => {
+                                {itemsInCategory.map(item => {
                                     const key = `${category}-${item}`;
                                     const current = currentStock[key] || 0;
 
@@ -1228,7 +1248,7 @@ const OrderStatsView = ({ db, appId, selectedStoreId, stores, showToast, masterS
                     {dateSummary && dateSummary.totalsByItem && (
                         <div className="space-y-4">
                             <h3 className="text-lg font-bold text-gray-900">Item Breakdown</h3>
-                            {Object.keys(masterStockList).map(category => {
+                            {CATEGORY_ORDER.map(category => {
                                 const categoryItems = masterStockList[category]
                                     .map(item => {
                                         const key = `${category}-${item}`;
@@ -2870,11 +2890,12 @@ const App = () => {
                     showToast={showToast} 
                     showConfirm={showConfirm}
                     onUpdateMasterList={setMasterStockList}
+                    categoryOrder={CATEGORY_ORDER} // Pass the order
                 />;
             case 'entry':
                 return (
                     <StockEntryView
-                        key={JSON.stringify(Object.keys(masterStockList))}
+                        key={JSON.stringify(CATEGORY_ORDER)}
                         storeId={storeName}
                         stockData={currentStock}
                         setStockData={setCurrentStock}
@@ -2892,7 +2913,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />; 
                 return (
                     <StockSoldView
-                        key={JSON.stringify(Object.keys(masterStockList))}
+                        key={JSON.stringify(CATEGORY_ORDER)}
                         currentStock={currentStock}
                         yesterdayStock={yesterdayStock}
                         calculateSold={calculateSold}
@@ -2904,7 +2925,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />; 
                 return (
                     <OrderingView
-                        key={JSON.stringify(Object.keys(masterStockList))}
+                        key={JSON.stringify(CATEGORY_ORDER)}
                         currentStock={currentStock}
                         orderQuantities={orderQuantities}
                         setOrderQuantities={setOrderQuantities}
@@ -2924,7 +2945,7 @@ const App = () => {
                 if (!isAdmin) return <HomeView />;
                 return (
                     <OrderStatsView
-                        key={JSON.stringify(Object.keys(masterStockList))}
+                        key={JSON.stringify(CATEGORY_ORDER)}
                         db={db}
                         appId={appId}
                         selectedStoreId={selectedStoreId}
@@ -3066,7 +3087,7 @@ const App = () => {
 };
 
 // --- Item Management Component ---
-const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, showToast, showConfirm, onUpdateMasterList }) => {
+const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, showToast, showConfirm, onUpdateMasterList, categoryOrder }) => {
     // Local state for edits, only save to Firestore on explicit save action
     const [localList, setLocalList] = useState(() => JSON.parse(JSON.stringify(initialMasterStockList))); // Deep copy for local edits
     const [isSavingList, setIsSavingList] = useState(false);
@@ -3081,13 +3102,15 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         setLocalList(JSON.parse(JSON.stringify(initialMasterStockList)));
         // Initialize all categories as expanded
         const expanded = {};
-        Object.keys(initialMasterStockList).forEach(cat => { expanded[cat] = true; });
+        categoryOrder.forEach(cat => { 
+            if (initialMasterStockList[cat]) expanded[cat] = true; 
+        });
         setExpandedCategories(expanded);
         // Set default category
-        if (!selectedCategory && Object.keys(initialMasterStockList).length > 0) {
-            setSelectedCategory(Object.keys(initialMasterStockList)[0]);
+        if (!selectedCategory && categoryOrder.length > 0) {
+            setSelectedCategory(categoryOrder[0]);
         }
-    }, [initialMasterStockList]);
+    }, [initialMasterStockList, categoryOrder]);
 
     const handleAddItem = async () => {
         if (!newItemName.trim() || !selectedCategory) {
@@ -3256,11 +3279,12 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
                     <label className="flex flex-col">
                         <span className="text-sm font-semibold text-orange-700/80 pb-2">Category</span>
                         <select
-                            className="form-input flex w-full min-w-0 flex-1 resize-none overflow-hidden rounded-lg focus:ring-2 focus:ring-orange-600/50 border border-gray-300 bg-white focus:border-orange-600 h-12 p-3 text-base font-normal leading-normal text-gray-900"
                             value={selectedCategory}
                             onChange={(e) => setSelectedCategory(e.target.value)}
+                            className="w-full p-3 bg-gray-50 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500"
                         >
-                            {Object.keys(localList).map(cat => (
+                            <option value="">Select a Category</option>
+                            {categoryOrder.map(cat => (
                                 <option key={cat} value={cat}>{cat}</option>
                             ))}
                         </select>
