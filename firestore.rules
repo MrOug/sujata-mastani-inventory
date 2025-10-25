@@ -30,6 +30,11 @@ service cloud.firestore {
         allow write: if isAdmin();
       }
       
+      // Allow authenticated users to read and write the master stock list
+      match /public/master_stock_list {
+        allow read, write: if isAuthenticated();
+      }
+      
       // This matches the "data" document that holds our subcollections.
       match /public/data {
 
