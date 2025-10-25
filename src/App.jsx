@@ -3108,6 +3108,7 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         updatedList[selectedCategory] = [...updatedList[selectedCategory], newItemName.trim()];
         
         setLocalList(updatedList);
+        await autoSaveList(updatedList);
         setNewItemName('');
         showToast(`Item "${newItemName.trim()}" added to ${selectedCategory}`, 'success');
     };
@@ -3127,6 +3128,7 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         updatedList[category] = updatedList[category].filter(i => i !== item);
         
         setLocalList(updatedList);
+        await autoSaveList(updatedList);
         showToast(`Item "${item}" deleted from ${category}`, 'success');
     };
 
@@ -3157,6 +3159,7 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         }
         
         setLocalList(updatedList);
+        await autoSaveList(updatedList);
         setEditingItem(null);
         setEditingItemName('');
         showToast(`Item renamed from "${oldName}" to "${newName}"`, 'success');
@@ -3165,6 +3168,28 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
     const handleCancelEdit = () => {
         setEditingItem(null);
         setEditingItemName('');
+    };
+
+    const autoSaveList = async (updatedList) => {
+        setIsSavingList(true);
+        try {
+            const listPath = `artifacts/${appId}/public/master_stock_list`;
+            const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
+            await setDoc(listDocRef, {
+                list: updatedList,
+                lastUpdated: new Date().toISOString()
+            });
+    
+            if (onUpdateMasterList) {
+                onUpdateMasterList(updatedList);
+            }
+            // No toast on auto-save to prevent being too noisy
+        } catch (error) {
+            console.error('❌ Error auto-saving master stock list:', error);
+            showToast(`Auto-save failed: ${error.message}`, 'error');
+        } finally {
+            setIsSavingList(false);
+        }
     };
 
     const handleSaveAll = async () => {
