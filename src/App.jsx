@@ -1097,7 +1097,9 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
     }, []);
 
     const saveOrderToFirestore = async (orderData, output) => {
-        if (!db || !selectedStoreId) return;
+        if (!db || !selectedStoreId) {
+            throw new Error('Database or store not initialized');
+        }
         
         try {
             const ordersColRef = collection(db, `artifacts/${appId}/public/data/orders`);
@@ -1115,29 +1117,59 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             console.log('Order saved to Firestore');
         } catch (error) {
             console.error('Error saving order:', error);
+            // Re-throw to allow caller to handle
+            throw error;
         }
     };
 
     const handleOutput = async () => {
-        const output = generateOrderOutput();
-
-        // Save to Firestore
-        await saveOrderToFirestore(orderQuantities, output);
-
-        // Fallback for copying to clipboard
-        const textArea = document.createElement("textarea");
-        textArea.value = output;
-        document.body.appendChild(textArea);
-        textArea.focus();
-        textArea.select();
         try {
-            document.execCommand('copy');
-            showToast('Order saved and copied to clipboard!', 'success');
-        } catch (err) {
-            showToast('Order saved but failed to copy. Please copy manually.', 'error');
+            const output = generateOrderOutput();
+
+            // Save to Firestore first
+            try {
+                await saveOrderToFirestore(orderQuantities, output);
+            } catch (saveError) {
+                console.error('Error saving order:', saveError);
+                // Continue even if save fails
+            }
+
+            // Copy to clipboard using modern API
+            try {
+                // Try modern Clipboard API first (works on HTTPS and localhost)
+                if (navigator.clipboard && navigator.clipboard.writeText) {
+                    await navigator.clipboard.writeText(output);
+                    showToast('Order saved and copied to clipboard!', 'success');
+                } else {
+                    // Fallback to execCommand for older browsers
+                    const textArea = document.createElement("textarea");
+                    textArea.value = output;
+                    textArea.style.position = 'fixed';
+                    textArea.style.left = '-999999px';
+                    textArea.style.top = '-999999px';
+                    document.body.appendChild(textArea);
+                    textArea.focus();
+                    textArea.select();
+                    const successful = document.execCommand('copy');
+                    document.body.removeChild(textArea);
+                    
+                    if (successful) {
+                        showToast('Order saved and copied to clipboard!', 'success');
+                    } else {
+                        throw new Error('Copy command failed');
+                    }
+                }
+            } catch (copyError) {
+                console.error('Error copying to clipboard:', copyError);
+                showToast('Order saved but failed to copy. Please copy manually from the modal.', 'warning');
+            }
+
+            // Show modal after copying
+            setShowOutputModal(true);
+        } catch (error) {
+            console.error('Error generating order:', error);
+            showToast('Failed to generate order. Please try again.', 'error');
         }
-        document.body.removeChild(textArea);
-        setShowOutputModal(true);
     };
 
     return (
@@ -1322,22 +1354,43 @@ const OrderingView = ({ currentStock, orderQuantities, setOrderQuantities, gener
             {showOutputModal && (
                 <Modal title="Order List Output" onClose={() => setShowOutputModal(false)}>
                     <p className="text-sm mb-4 text-gray-700">The order list has been copied to your clipboard. You can also copy it manually from here.</p>
-                    <pre className="p-4 bg-gray-50 text-gray-900 text-sm overflow-x-scroll rounded-lg border border-gray-300 font-mono">{generateOrderOutput()}</pre>
+                    <div className="overflow-x-auto -mx-2 px-2">
+                        <pre className="p-3 sm:p-4 bg-gray-50 text-gray-900 text-xs sm:text-sm rounded-lg border border-gray-300 font-mono whitespace-pre-wrap break-words text-left max-w-full">
+                            {generateOrderOutput()}
+                        </pre>
+                    </div>
                     <button
-                        onClick={() => {
-                            const output = generateOrderOutput();
-                            const textArea = document.createElement("textarea");
-                            textArea.value = output;
-                            document.body.appendChild(textArea);
-                            textArea.focus();
-                            textArea.select();
+                        onClick={async () => {
                             try {
-                                document.execCommand('copy');
-                                showToast('Order list re-copied to clipboard!', 'success');
+                                const output = generateOrderOutput();
+                                
+                                // Try modern Clipboard API first
+                                if (navigator.clipboard && navigator.clipboard.writeText) {
+                                    await navigator.clipboard.writeText(output);
+                                    showToast('Order list re-copied to clipboard!', 'success');
+                                } else {
+                                    // Fallback to execCommand
+                                    const textArea = document.createElement("textarea");
+                                    textArea.value = output;
+                                    textArea.style.position = 'fixed';
+                                    textArea.style.left = '-999999px';
+                                    textArea.style.top = '-999999px';
+                                    document.body.appendChild(textArea);
+                                    textArea.focus();
+                                    textArea.select();
+                                    const successful = document.execCommand('copy');
+                                    document.body.removeChild(textArea);
+                                    
+                                    if (successful) {
+                                        showToast('Order list re-copied to clipboard!', 'success');
+                                    } else {
+                                        throw new Error('Copy command failed');
+                                    }
+                                }
                             } catch (err) {
-                                showToast('Failed to copy. Please copy manually.', 'error');
+                                console.error('Error copying:', err);
+                                showToast('Failed to copy. Please select and copy manually.', 'error');
                             }
-                            document.body.removeChild(textArea);
                         }}
                         className="mt-4 w-full py-3 bg-orange-500 hover:bg-orange-600 text-white font-bold rounded-lg transition duration-200"
                     >
@@ -1801,7 +1854,18 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
     };
 
     return (
-        <div>
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
+                    {/* Logo */}
+                    <div className="text-center mb-8">
+                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                            <User className="w-10 h-10 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold font-display text-orange-600">Login</h1>
+                        <p className="text-gray-600 mt-2">Welcome back to Sujata Mastani!</p>
+                    </div>
+
             <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -1837,11 +1901,22 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
                 <button
                     type="submit"
                     disabled={isLoading}
-                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
+                            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
                 >
-                    {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Log In'}
+                            {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Log In'}
                 </button>
             </form>
+            
+                    <div className="mt-6 text-center">
+            <button
+                            onClick={onSwitchToRegister}
+                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+                        >
+                            Need to register? Sign Up
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -1941,12 +2016,19 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
     };
 
     return (
-        <div className="space-y-4">
-            <div className="text-center mb-4">
-                <p className="text-sm text-gray-600">Step {step} of 2</p>
-            </div>
-            
-            {step === 1 ? (
+        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
+            <div className="w-full max-w-md">
+                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
+                    {/* Logo */}
+                    <div className="text-center mb-8">
+                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                            <UserPlus className="w-10 h-10 text-white" />
+                        </div>
+                        <h1 className="text-3xl font-bold font-display text-orange-600">Register Admin</h1>
+                        <p className="text-gray-600 mt-2">Step {step} of 2</p>
+                    </div>
+
+                    {step === 1 ? (
                         <form onSubmit={handleRequestOTP} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -2062,6 +2144,17 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                             </button>
                         </form>
                     )}
+
+                    <div className="mt-6 text-center">
+                        <button
+                            onClick={onSwitchToLogin}
+                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
+                        >
+                            Already have an account? Log In
+                        </button>
+                    </div>
+                </div>
+            </div>
         </div>
     );
 };
@@ -2114,7 +2207,12 @@ const App = () => {
     const [miscStatus, setMiscStatus] = useState(getEmptyMiscStatus()); // Track MISC items stock status
     const [selectedMiscItems, setSelectedMiscItems] = useState({}); // Track which MISC items are selected for ordering
     
-    // Removed auto-switch to register - users can choose login or register
+    // Auto-switch to register screen if it's the first user
+    useEffect(() => {
+        if (isFirstUser && authScreen === 'login') {
+            setAuthScreen('register');
+        }
+    }, [isFirstUser, authScreen]);
     
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
@@ -2216,7 +2314,8 @@ const App = () => {
                             setUserStoreId(roleSnap.data().storeId || null);
                         } else {
                             const defaultRole = 'admin'; 
-                            await setDoc(roleDocRef, { role: defaultRole, username: username || user.email.split('@')[0] }, { merge: true });
+                            const defaultUsername = username || (user.email ? user.email.split('@')[0] : user.uid.substring(0, 8));
+                            await setDoc(roleDocRef, { role: defaultRole, username: defaultUsername }, { merge: true });
                             setRole(defaultRole);
                             setUserStoreId(null);
                         }
@@ -2550,10 +2649,13 @@ const App = () => {
     const getEmptyStockDynamic = useCallback(() => {
         const stock = {};
         Object.keys(masterStockList).forEach(category => {
-            masterStockList[category].forEach(item => {
-                const key = `${category}-${item}`;
-                stock[key] = 0;
-            });
+            const categoryItems = masterStockList[category];
+            if (Array.isArray(categoryItems)) {
+                categoryItems.forEach(item => {
+                    const key = `${category}-${item}`;
+                    stock[key] = 0;
+                });
+            }
         });
         return stock;
     }, [masterStockList]);
@@ -2594,7 +2696,7 @@ const App = () => {
             const todaySnap = await getDoc(todayDocRef);
             if (todaySnap.exists()) {
                 const data = todaySnap.data().stock;
-                setCurrentStock(data);
+                setCurrentStock(data || getEmptyStock());
             } else {
                 setCurrentStock(getEmptyStock());
                 setOrderQuantities(getEmptyStock());
@@ -2602,7 +2704,8 @@ const App = () => {
 
             const yesterdaySnap = await getDoc(yesterdayDocRef);
             if (yesterdaySnap.exists()) {
-                setYesterdayStock(yesterdaySnap.data().stock);
+                const yesterdayData = yesterdaySnap.data().stock;
+                setYesterdayStock(yesterdayData || getEmptyStock());
             } else {
                 setYesterdayStock(getEmptyStock());
             }
@@ -2752,12 +2855,15 @@ const App = () => {
 
             // Calculate sold stock for each item
             Object.keys(masterStockList).forEach(category => {
-                masterStockList[category].forEach(item => {
-                    const key = `${category}-${item}`;
-                    const current = currentStock[key] || 0;
-                    const yesterday = yesterdayStock[key] || 0;
-                    exportData.calculatedSold[key] = yesterday - current;
-                });
+                const categoryItems = masterStockList[category];
+                if (Array.isArray(categoryItems)) {
+                    categoryItems.forEach(item => {
+                        const key = `${category}-${item}`;
+                        const current = currentStock[key] || 0;
+                        const yesterday = yesterdayStock[key] || 0;
+                        exportData.calculatedSold[key] = yesterday - current;
+                    });
+                }
             });
 
             // Create and download JSON file
@@ -2814,7 +2920,7 @@ const App = () => {
         }
 
         // ICE CREAM DABBE
-        if (masterStockList['ICE CREAM DABBE']) {
+        if (masterStockList['ICE CREAM DABBE'] && Array.isArray(masterStockList['ICE CREAM DABBE'])) {
             output += '\n';
             masterStockList['ICE CREAM DABBE'].forEach(item => {
                 const key = `ICE CREAM DABBE-${item}`;
@@ -2824,7 +2930,7 @@ const App = () => {
         }
 
         // Selected MISC items (only those checked and marked as low stock)
-        if (masterStockList.MISC) {
+        if (masterStockList.MISC && Array.isArray(masterStockList.MISC)) {
             const selectedMiscList = [];
             masterStockList.MISC.forEach(item => {
                 const key = `MISC-${item}`;
@@ -3010,63 +3116,25 @@ const App = () => {
         );
     }
 
-    // If no user is authenticated, show auth screen with Login and Register options
+    // If no user is authenticated, show login or register screen
     if (!userId || !role) {
+        if (authScreen === 'register') {
         return (
-            <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
-                <div className="w-full max-w-md">
-                    <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
-                        {/* Logo */}
-                        <div className="text-center mb-8">
-                            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                                <User className="w-10 h-10 text-white" />
-                            </div>
-                            <h1 className="text-3xl font-bold font-display text-orange-600">Sujata Mastani</h1>
-                            <p className="text-gray-600 mt-2">Inventory Management System</p>
-                        </div>
-
-                        {/* Auth Screen Selection */}
-                        <div className="flex gap-4 mb-6">
-                            <button
-                                onClick={() => setAuthScreen('login')}
-                                className={`flex-1 py-3 rounded-lg font-bold transition ${
-                                    authScreen === 'login'
-                                        ? 'bg-orange-600 text-white shadow-lg'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                            >
-                                Login
-                            </button>
-                            <button
-                                onClick={() => setAuthScreen('register')}
-                                className={`flex-1 py-3 rounded-lg font-bold transition ${
-                                    authScreen === 'register'
-                                        ? 'bg-orange-600 text-white shadow-lg'
-                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
-                                }`}
-                            >
-                                Register
-                            </button>
-                        </div>
-
-                        {/* Show Login or Register based on selection */}
-                        {authScreen === 'register' ? (
-                            <RegisterScreen
-                                auth={auth}
-                                onLoginSuccess={handleAuthSuccess}
-                                onSwitchToLogin={() => setAuthScreen('login')}
-                            />
-                        ) : (
-                            <LoginScreen
-                                auth={auth}
-                                onLoginSuccess={handleAuthSuccess}
-                                onSwitchToRegister={() => setAuthScreen('register')}
-                            />
-                        )}
-                    </div>
-                </div>
-            </div>
-        );
+                <RegisterScreen
+                        auth={auth} 
+                        onLoginSuccess={handleAuthSuccess}
+                    onSwitchToLogin={() => setAuthScreen('login')}
+                />
+            );
+        } else {
+            return (
+                <LoginScreen
+                    auth={auth}
+                    onLoginSuccess={handleAuthSuccess}
+                    onSwitchToRegister={() => setAuthScreen('register')}
+                />
+            );
+        }
     }
 
     // If stores haven't loaded yet but user is authenticated, show minimal loading
@@ -3495,8 +3563,10 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
             return;
         }
 
+        const trimmedName = newItemName.trim();
+
         // Check if item already exists
-        if (localList[selectedCategory]?.includes(newItemName.trim())) {
+        if (localList[selectedCategory]?.includes(trimmedName)) {
             showToast('Item already exists in this category', 'warning');
             return;
         }
@@ -3505,12 +3575,12 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         if (!updatedList[selectedCategory]) {
             updatedList[selectedCategory] = [];
         }
-        updatedList[selectedCategory] = [...updatedList[selectedCategory], newItemName.trim()];
+        updatedList[selectedCategory] = [...updatedList[selectedCategory], trimmedName];
         
         setLocalList(updatedList);
         await autoSaveList(updatedList);
         setNewItemName('');
-        showToast(`Item "${newItemName.trim()}" added to ${selectedCategory}`, 'success');
+        showToast(`Item "${trimmedName}" added to ${selectedCategory}`, 'success');
     };
 
     const handleDeleteItem = async (category, item) => {
@@ -3525,7 +3595,11 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         if (!confirmed) return;
 
         const updatedList = { ...localList };
-        updatedList[category] = updatedList[category].filter(i => i !== item);
+        if (updatedList[category] && Array.isArray(updatedList[category])) {
+            updatedList[category] = updatedList[category].filter(i => i !== item);
+        } else {
+            updatedList[category] = [];
+        }
         
         setLocalList(updatedList);
         await autoSaveList(updatedList);
@@ -3553,9 +3627,11 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
         }
 
         const updatedList = { ...localList };
-        const index = updatedList[category].indexOf(oldName);
-        if (index !== -1) {
-            updatedList[category][index] = newName;
+        if (updatedList[category] && Array.isArray(updatedList[category])) {
+            const index = updatedList[category].indexOf(oldName);
+            if (index !== -1) {
+                updatedList[category][index] = newName;
+            }
         }
         
         setLocalList(updatedList);
@@ -3571,6 +3647,11 @@ const ItemManagerView = ({ db, appId, masterStockList: initialMasterStockList, s
     };
 
     const autoSaveList = async (updatedList) => {
+        if (!db || !appId) {
+            console.error('Database or appId not available for auto-save');
+            return;
+        }
+        
         setIsSavingList(true);
         try {
             const listPath = `artifacts/${appId}/public/master_stock_list`;

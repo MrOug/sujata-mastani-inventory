@@ -7,49 +7,74 @@ service cloud.firestore {
       return request.auth != null;
     }
 
+    function getUserData() {
+      // This function securely gets the profile data for the currently logged-in user.
+      // Returns null if profile doesn't exist instead of throwing an error
+      let userProfile = get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile);
+      return userProfile != null ? userProfile.data : null;
+    }
+
+    function getRole() {
+      // Safely get user role, returns null if not found
+      let userData = getUserData();
+      return userData != null && userData.role != null ? userData.role : null;
+    }
+
+    function isAdmin() {
+      return isAuthenticated() && getRole() == 'admin';
+    }
+
+    function isStaff() {
+      return isAuthenticated() && getRole() == 'staff';
+    }
+
     // --- Data Security Rules ---
-    // Simplified approach: Allow all authenticated users to read/write
-    // App-level code enforces role-based access (admin vs staff)
     match /artifacts/{appId} {
       
-      // Public config - readable by anyone, writable by authenticated users
+      // The public config document is readable by anyone to check if setup is done.
+      // Only the first admin can write to it.
       match /public/config {
         allow read: if true;
-        allow write: if isAuthenticated();
+        allow write: if isAdmin();
       }
       
-      // Master stock list - readable/writable by authenticated users
+      // Allow authenticated users to read and write the master stock list
       match /public/master_stock_list {
         allow read, write: if isAuthenticated();
       }
       
-      // Public data collections
+      // This matches the "data" document that holds our subcollections.
       match /public/data {
-        
-        // Stores - readable/writable by authenticated users (app enforces admin-only)
+
+        // Rules for the 'stores' subcollection (e.g., /public/data/stores/{storeId})
         match /stores/{storeId} {
-          allow read, write: if isAuthenticated();
+          allow read: if isAuthenticated();    // Any logged-in user can see the store list.
+          allow write: if isAdmin();           // ONLY admins can create or delete stores.
         }
 
-        // Stock entries - readable/writable by authenticated users (app enforces admin+staff)
+        // Rules for the 'stock_entries' subcollection (e.g., /public/data/stock_entries/{entryId})
         match /stock_entries/{entryId} {
-          allow read, write: if isAuthenticated();
+          allow read: if isAuthenticated();    // Any logged-in user can read stock entries (for reports).
+          // Allow write for authenticated users
+          // Note: Role checking is done in app logic. If user profile doesn't exist, this allows the save
+          // to prevent blocking legitimate saves. The app ensures profiles are created on login.
+          allow write: if isAuthenticated();
         }
 
-        // Orders - readable/writable by authenticated users (app enforces admin+staff)
+        // Rules for the 'orders' subcollection (e.g., /public/data/orders/{orderId})
         match /orders/{orderId} {
-          allow read, write, delete: if isAuthenticated();
+          allow read: if isAuthenticated();    // Any logged-in user can read orders (for order history).
+          // Allow write for authenticated users (role check done in app logic)
+          allow write: if isAuthenticated();
+          allow delete: if isAdmin();           // ONLY admins can delete orders.
         }
       }
       
-      // User profiles - readable/writable by authenticated users (app enforces admin-only for listing)
-      match /users/{userId} {
-        // Allow reading user documents (for collection queries)
-        allow read: if isAuthenticated();
-        // Allow reading/writing user subcollections/documents
-        match /{document=**} {
-          allow read, write: if isAuthenticated();
-        }
+      // Rules for user-specific private data
+      match /users/{userId}/{documents=**} {
+        // A user can only read or write their OWN data. Admins can also read user profiles.
+        allow read: if request.auth.uid == userId || isAdmin();
+        allow write: if request.auth.uid == userId;
       }
     }
   }
