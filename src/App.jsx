@@ -438,12 +438,176 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 
 // --- Admin User Management Component ---
 
-const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast }) => {
+const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, showToast, showConfirm }) => {
     const [username, setUsername] = useState('');
     const [password, setPassword] = useState('');
     const [role, setRole] = useState('staff');
     const [storeId, setStoreId] = useState(Object.keys(stores)[0]);
     const [isCreating, setIsCreating] = useState(false);
+    
+    // User list state
+    const [users, setUsers] = useState([]);
+    const [loadingUsers, setLoadingUsers] = useState(true);
+    const [editingUser, setEditingUser] = useState(null);
+    const [editRole, setEditRole] = useState('');
+    const [editStoreId, setEditStoreId] = useState('');
+    
+    // Fetch all users
+    useEffect(() => {
+        if (!db || !appId) return;
+        
+        const fetchUsers = async () => {
+            setLoadingUsers(true);
+            try {
+                const usersColRef = collection(db, `artifacts/${appId}/users`);
+                const querySnapshot = await getDocs(usersColRef);
+                
+                const usersList = [];
+                for (const userDoc of querySnapshot.docs) {
+                    try {
+                        const profileRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/user_config/profile`);
+                        const profileSnap = await getDoc(profileRef);
+                        
+                        if (profileSnap.exists()) {
+                            const profileData = profileSnap.data();
+                            usersList.push({
+                                uid: userDoc.id,
+                                username: profileData.username || 'N/A',
+                                role: profileData.role || 'staff',
+                                storeId: profileData.storeId || null,
+                                storeName: profileData.storeId ? stores[profileData.storeId]?.name || profileData.storeId : 'Not assigned',
+                                email: profileData.email || `${profileData.username}@sujata-mastani-inventory.local`
+                            });
+                        }
+                    } catch (error) {
+                        console.error(`Error fetching profile for user ${userDoc.id}:`, error);
+                    }
+                }
+                
+                setUsers(usersList.sort((a, b) => a.username.localeCompare(b.username)));
+            } catch (error) {
+                console.error('Error fetching users:', error);
+                showToast('Failed to load users', 'error');
+            } finally {
+                setLoadingUsers(false);
+            }
+        };
+        
+        fetchUsers();
+    }, [db, appId, stores]);
+    
+    // Handle edit user
+    const handleEditUser = (user) => {
+        setEditingUser(user.uid);
+        setEditRole(user.role);
+        setEditStoreId(user.storeId || '');
+    };
+    
+    const handleSaveEdit = async () => {
+        if (!editingUser) return;
+        
+        try {
+            const userConfigRef = doc(db, `artifacts/${appId}/users/${editingUser}/user_config/profile`);
+            await updateDoc(userConfigRef, {
+                role: editRole,
+                storeId: editStoreId || null
+            });
+            
+            showToast('User updated successfully!', 'success');
+            setEditingUser(null);
+            // Refresh users list
+            const usersColRef = collection(db, `artifacts/${appId}/users`);
+            const querySnapshot = await getDocs(usersColRef);
+            const usersList = [];
+            for (const userDoc of querySnapshot.docs) {
+                try {
+                    const profileRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/user_config/profile`);
+                    const profileSnap = await getDoc(profileRef);
+                    if (profileSnap.exists()) {
+                        const profileData = profileSnap.data();
+                        usersList.push({
+                            uid: userDoc.id,
+                            username: profileData.username || 'N/A',
+                            role: profileData.role || 'staff',
+                            storeId: profileData.storeId || null,
+                            storeName: profileData.storeId ? stores[profileData.storeId]?.name || profileData.storeId : 'Not assigned',
+                            email: profileData.email || `${profileData.username}@sujata-mastani-inventory.local`
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error fetching profile for user ${userDoc.id}:`, error);
+                }
+            }
+            setUsers(usersList.sort((a, b) => a.username.localeCompare(b.username)));
+        } catch (error) {
+            console.error('Error updating user:', error);
+            showToast('Failed to update user', 'error');
+        }
+    };
+    
+    const handleCancelEdit = () => {
+        setEditingUser(null);
+        setEditRole('');
+        setEditStoreId('');
+    };
+    
+    // Handle delete user
+    const handleDeleteUser = async (user) => {
+        const confirmed = await showConfirm({
+            title: 'Delete User',
+            message: `Are you sure you want to delete user "${user.username}"? This will remove their profile from Firestore. Note: You'll need to delete their authentication account manually from Firebase Console.`,
+            confirmText: 'Delete',
+            cancelText: 'Cancel',
+            confirmColor: 'red'
+        });
+        
+        if (!confirmed) return;
+        
+        try {
+            // Delete user profile from Firestore
+            const userProfileRef = doc(db, `artifacts/${appId}/users/${user.uid}/user_config/profile`);
+            await deleteDoc(userProfileRef);
+            
+            // Also try to delete the user document if it exists
+            try {
+                const userDocRef = doc(db, `artifacts/${appId}/users/${user.uid}`);
+                await deleteDoc(userDocRef);
+            } catch (error) {
+                // User doc might not exist, that's okay
+                console.log('User document may not exist, continuing...');
+            }
+            
+            showToast(`User ${user.username} profile deleted. Remember to delete from Firebase Authentication Console.`, 'success');
+            
+            // Refresh users list
+            const usersColRef = collection(db, `artifacts/${appId}/users`);
+            const querySnapshot = await getDocs(usersColRef);
+            const usersList = [];
+            for (const userDoc of querySnapshot.docs) {
+                try {
+                    const profileRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/user_config/profile`);
+                    const profileSnap = await getDoc(profileRef);
+                    if (profileSnap.exists()) {
+                        const profileData = profileSnap.data();
+                        usersList.push({
+                            uid: userDoc.id,
+                            username: profileData.username || 'N/A',
+                            role: profileData.role || 'staff',
+                            storeId: profileData.storeId || null,
+                            storeName: profileData.storeId ? stores[profileData.storeId]?.name || profileData.storeId : 'Not assigned',
+                            email: profileData.email || `${profileData.username}@sujata-mastani-inventory.local`
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error fetching profile for user ${userDoc.id}:`, error);
+                }
+            }
+            setUsers(usersList.sort((a, b) => a.username.localeCompare(b.username)));
+        } catch (error) {
+            console.error('Error deleting user:', error);
+            showToast('Failed to delete user', 'error');
+        }
+    };
 
     const handleCreateUser = async (e) => {
         e.preventDefault();
@@ -472,6 +636,31 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
             showToast(`User ${username} created successfully!`, 'success');
             setUsername('');
             setPassword('');
+            
+            // Refresh users list
+            const usersColRef = collection(db, `artifacts/${appId}/users`);
+            const querySnapshot = await getDocs(usersColRef);
+            const usersList = [];
+            for (const userDoc of querySnapshot.docs) {
+                try {
+                    const profileRef = doc(db, `artifacts/${appId}/users/${userDoc.id}/user_config/profile`);
+                    const profileSnap = await getDoc(profileRef);
+                    if (profileSnap.exists()) {
+                        const profileData = profileSnap.data();
+                        usersList.push({
+                            uid: userDoc.id,
+                            username: profileData.username || 'N/A',
+                            role: profileData.role || 'staff',
+                            storeId: profileData.storeId || null,
+                            storeName: profileData.storeId ? stores[profileData.storeId]?.name || profileData.storeId : 'Not assigned',
+                            email: profileData.email || `${profileData.username}@sujata-mastani-inventory.local`
+                        });
+                    }
+                } catch (error) {
+                    console.error(`Error fetching profile for user ${userDoc.id}:`, error);
+                }
+            }
+            setUsers(usersList.sort((a, b) => a.username.localeCompare(b.username)));
         } catch (error) {
             console.error("Error creating user:", error);
             showToast(`Failed: ${error.message.replace('Firebase: Error (auth/', '').replace(').', '')}`, 'error');
@@ -558,6 +747,120 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
                 >
                     📊 Export Stock Data
                 </button>
+            </div>
+
+            {/* Users List */}
+            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100">
+                <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-4">Existing Users ({users.length})</h3>
+                
+                {loadingUsers ? (
+                    <div className="flex items-center justify-center p-8">
+                        <Loader className="animate-spin w-6 h-6 text-orange-600" />
+                        <span className="ml-2 text-gray-600">Loading users...</span>
+                    </div>
+                ) : users.length === 0 ? (
+                    <p className="text-gray-500 text-center p-8">No users found. Create your first user above.</p>
+                ) : (
+                    <div className="overflow-x-auto">
+                        <table className="w-full">
+                            <thead>
+                                <tr className="border-b border-gray-200">
+                                    <th className="text-left p-3 text-sm font-semibold text-gray-700">Username</th>
+                                    <th className="text-left p-3 text-sm font-semibold text-gray-700">Role</th>
+                                    <th className="text-left p-3 text-sm font-semibold text-gray-700">Store</th>
+                                    <th className="text-left p-3 text-sm font-semibold text-gray-700">Actions</th>
+                                </tr>
+                            </thead>
+                            <tbody>
+                                {users.map((user) => (
+                                    <tr key={user.uid} className="border-b border-gray-100 hover:bg-gray-50">
+                                        <td className="p-3">
+                                            {editingUser === user.uid ? (
+                                                <input
+                                                    type="text"
+                                                    value={user.username}
+                                                    disabled
+                                                    className="w-full p-2 border border-gray-300 rounded bg-gray-100"
+                                                />
+                                            ) : (
+                                                <span className="font-medium text-gray-900">{user.username}</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3">
+                                            {editingUser === user.uid ? (
+                                                <select
+                                                    value={editRole}
+                                                    onChange={(e) => setEditRole(e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500"
+                                                >
+                                                    <option value="staff">Staff</option>
+                                                    <option value="admin">Admin</option>
+                                                </select>
+                                            ) : (
+                                                <span className={`px-2 py-1 rounded text-xs font-medium ${
+                                                    user.role === 'admin' 
+                                                        ? 'bg-orange-100 text-orange-700' 
+                                                        : 'bg-blue-100 text-blue-700'
+                                                }`}>
+                                                    {user.role.toUpperCase()}
+                                                </span>
+                                            )}
+                                        </td>
+                                        <td className="p-3">
+                                            {editingUser === user.uid ? (
+                                                <select
+                                                    value={editStoreId}
+                                                    onChange={(e) => setEditStoreId(e.target.value)}
+                                                    className="w-full p-2 border border-gray-300 rounded focus:ring-2 focus:ring-orange-500"
+                                                >
+                                                    <option value="">Not assigned</option>
+                                                    {Object.entries(stores).map(([id, storeData]) => (
+                                                        <option key={id} value={id}>{storeData?.name || id}</option>
+                                                    ))}
+                                                </select>
+                                            ) : (
+                                                <span className="text-gray-700">{user.storeName}</span>
+                                            )}
+                                        </td>
+                                        <td className="p-3">
+                                            {editingUser === user.uid ? (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={handleSaveEdit}
+                                                        className="px-3 py-1 bg-green-600 hover:bg-green-700 text-white rounded text-sm font-medium transition"
+                                                    >
+                                                        Save
+                                                    </button>
+                                                    <button
+                                                        onClick={handleCancelEdit}
+                                                        className="px-3 py-1 bg-gray-400 hover:bg-gray-500 text-white rounded text-sm font-medium transition"
+                                                    >
+                                                        Cancel
+                                                    </button>
+                                                </div>
+                                            ) : (
+                                                <div className="flex gap-2">
+                                                    <button
+                                                        onClick={() => handleEditUser(user)}
+                                                        className="px-3 py-1 bg-orange-600 hover:bg-orange-700 text-white rounded text-sm font-medium transition"
+                                                    >
+                                                        Edit
+                                                    </button>
+                                                    <button
+                                                        onClick={() => handleDeleteUser(user)}
+                                                        className="px-3 py-1 bg-red-600 hover:bg-red-700 text-white rounded text-sm font-medium transition"
+                                                    >
+                                                        <Trash2 className="w-4 h-4 inline" />
+                                                    </button>
+                                                </div>
+                                            )}
+                                        </td>
+                                    </tr>
+                                ))}
+                            </tbody>
+                        </table>
+                    </div>
+                )}
             </div>
         </div>
     );
@@ -2012,10 +2315,24 @@ const App = () => {
             console.log('Network: Offline');
         };
 
+        // Suppress NS_BINDING_ABORTED errors in console (harmless connection terminations)
+        const originalError = console.error;
+        console.error = (...args) => {
+            const errorStr = args.join(' ');
+            // Filter out NS_BINDING_ABORTED errors
+            if (errorStr.includes('NS_BINDING_ABORTED') || 
+                errorStr.includes('terminate') && errorStr.includes('Firestore')) {
+                // Silently ignore these harmless connection termination errors
+                return;
+            }
+            originalError.apply(console, args);
+        };
+
         window.addEventListener('online', handleOnline);
         window.addEventListener('offline', handleOffline);
 
         return () => {
+            console.error = originalError; // Restore original console.error
             window.removeEventListener('online', handleOnline);
             window.removeEventListener('offline', handleOffline);
         };
@@ -2087,6 +2404,11 @@ const App = () => {
                 handleError(error, 'Store Data Processing');
             }
         }, (error) => {
+            // Ignore NS_BINDING_ABORTED errors - these are harmless connection terminations
+            if (error?.code === 'cancelled' || error?.message?.includes('NS_BINDING_ABORTED') || error?.message?.includes('terminate')) {
+                console.log('Connection terminated (harmless):', error.message);
+                return;
+            }
             console.error("Error listening to stores:", error);
             handleError(error, 'Store Fetching');
             setStores({}); // Set empty stores on error
@@ -2232,6 +2554,11 @@ const App = () => {
                 });
             }
         }, (error) => {
+            // Ignore NS_BINDING_ABORTED errors - these are harmless connection terminations
+            if (error?.code === 'cancelled' || error?.message?.includes('NS_BINDING_ABORTED') || error?.message?.includes('terminate')) {
+                console.log('Connection terminated (harmless):', error.message);
+                return;
+            }
             console.error('❌ Error listening to master stock list:', error);
         });
 
@@ -2385,31 +2712,60 @@ const App = () => {
 
             setIsSaving(true);
 
-            // SAVE WITH PERFORMANCE MONITORING
-            await perfMonitor.measureAsync('saveStock', async () => {
-                const date = selectedDate;
-                const docId = `${selectedStoreId}-${date}`;
-                const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
+            const date = selectedDate;
+            const docId = `${selectedStoreId}-${date}`;
+            const docRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, docId);
 
-                // USE RETRY LOGIC
-                await retryOperation(async () => {
-                    await setDoc(docRef, {
-                        storeId: selectedStoreId,
-                        date: date,
-                        stock: sanitized,
-                        userId: userId,
-                        timestamp: new Date().toISOString()
-                    });
-                });
-
-                // BACKUP TO LOCAL STORAGE
-                storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
+            console.log('Saving stock entry:', { docId, storeId: selectedStoreId, date, itemCount: totalItems, userId, role });
+            
+            // Add timeout to prevent hanging
+            const savePromise = setDoc(docRef, {
+                storeId: selectedStoreId,
+                date: date,
+                stock: sanitized,
+                userId: userId,
+                timestamp: new Date().toISOString()
             });
+
+            const timeoutPromise = new Promise((_, reject) => 
+                setTimeout(() => reject(new Error('Save operation timed out after 30 seconds')), 30000)
+            );
+
+            // Save directly to Firestore with timeout
+            await Promise.race([savePromise, timeoutPromise]);
+
+            console.log('Stock entry saved successfully to Firestore');
+
+            // BACKUP TO LOCAL STORAGE
+            try {
+                storageBackup.save(`stock_${selectedStoreId}_${date}`, sanitized);
+            } catch (backupError) {
+                console.warn('Local storage backup failed (non-critical):', backupError);
+            }
 
             showToast('Stock saved successfully!', 'success');
         } catch (error) {
-            handleError(error, 'Stock Saving');
-            showToast(error.message || 'Error saving stock', 'error');
+            console.error('Stock save error details:', {
+                code: error.code,
+                message: error.message,
+                stack: error.stack,
+                userId,
+                role,
+                selectedStoreId,
+                docId: `${selectedStoreId}-${selectedDate}`
+            });
+            
+            // Handle specific error types
+            if (error.code === 'permission-denied') {
+                showToast('Permission denied. Please check your user role and try again.', 'error');
+            } else if (error.code === 'unauthenticated') {
+                showToast('You are not authenticated. Please log in again.', 'error');
+            } else if (error.message?.includes('timed out')) {
+                showToast('Save operation timed out. Please check your internet connection and try again.', 'error');
+            } else {
+                handleError(error, 'Stock Saving');
+                showToast(error.message || 'Error saving stock. Please try again.', 'error');
+            }
         } finally {
             setIsSaving(false);
         }
@@ -2908,7 +3264,7 @@ const App = () => {
                 return <StoreManagementView db={db} appId={appId} stores={stores} showToast={showToast} showConfirm={showConfirm} />;
             case 'usermanager':
                 if (!isAdmin) return <HomeView />;
-                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} />;
+                return <AdminUserManagementView db={db} appId={appId} stores={stores} auth={auth} exportStockData={exportStockData} showToast={showToast} showConfirm={showConfirm} />;
             case 'itemmanager':
                 if (!isAdmin) return <HomeView />;
                 return <ItemManagerView 
