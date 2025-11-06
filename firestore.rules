@@ -7,74 +7,74 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    function getUserData() {
-      // This function securely gets the profile data for the currently logged-in user.
-      // Returns null if profile doesn't exist instead of throwing an error
-      let userProfile = get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile);
-      return userProfile != null ? userProfile.data : null;
+    // Check if user profile exists
+    function userProfileExists() {
+      return exists(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile);
     }
 
-    function getRole() {
-      // Safely get user role, returns null if not found
-      let userData = getUserData();
-      return userData != null && userData.role != null ? userData.role : null;
+    // Get user role - returns null if profile doesn't exist
+    function getUserRole() {
+      // Only try to get role if profile exists
+      return userProfileExists() 
+        ? get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data.role
+        : null;
     }
 
     function isAdmin() {
-      return isAuthenticated() && getRole() == 'admin';
+      return isAuthenticated() && getUserRole() == 'admin';
     }
 
     function isStaff() {
-      return isAuthenticated() && getRole() == 'staff';
+      return isAuthenticated() && getUserRole() == 'staff';
+    }
+
+    function isAdminOrStaff() {
+      return isAdmin() || isStaff();
     }
 
     // --- Data Security Rules ---
     match /artifacts/{appId} {
       
-      // The public config document is readable by anyone to check if setup is done.
-      // Only the first admin can write to it.
+      // Public config - readable by anyone, writable by admin or authenticated user (for first setup)
       match /public/config {
         allow read: if true;
-        allow write: if isAdmin();
+        allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
       }
       
-      // Allow authenticated users to read and write the master stock list
+      // Master stock list - readable by authenticated users, writable by admin
       match /public/master_stock_list {
-        allow read, write: if isAuthenticated();
+        allow read: if isAuthenticated();
+        allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
       }
       
-      // This matches the "data" document that holds our subcollections.
+      // Public data collections
       match /public/data {
-
-        // Rules for the 'stores' subcollection (e.g., /public/data/stores/{storeId})
+        
+        // Stores - readable by all authenticated, writable by admin only
         match /stores/{storeId} {
-          allow read: if isAuthenticated();    // Any logged-in user can see the store list.
-          allow write: if isAdmin();           // ONLY admins can create or delete stores.
+          allow read: if isAuthenticated();
+          allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
         }
 
-        // Rules for the 'stock_entries' subcollection (e.g., /public/data/stock_entries/{entryId})
+        // Stock entries - readable by all authenticated, writable by admin OR staff
         match /stock_entries/{entryId} {
-          allow read: if isAuthenticated();    // Any logged-in user can read stock entries (for reports).
-          // Allow write for authenticated users
-          // Note: Role checking is done in app logic. If user profile doesn't exist, this allows the save
-          // to prevent blocking legitimate saves. The app ensures profiles are created on login.
-          allow write: if isAuthenticated();
+          allow read: if isAuthenticated();
+          // Allow write if: admin, staff, OR authenticated user without profile (first-time access)
+          allow write: if isAdmin() || isStaff() || (isAuthenticated() && !userProfileExists());
         }
 
-        // Rules for the 'orders' subcollection (e.g., /public/data/orders/{orderId})
+        // Orders - readable by all authenticated, writable by admin OR staff, delete by admin only
         match /orders/{orderId} {
-          allow read: if isAuthenticated();    // Any logged-in user can read orders (for order history).
-          // Allow write for authenticated users (role check done in app logic)
-          allow write: if isAuthenticated();
-          allow delete: if isAdmin();           // ONLY admins can delete orders.
+          allow read: if isAuthenticated();
+          allow write: if isAdmin() || isStaff() || (isAuthenticated() && !userProfileExists());
+          allow delete: if isAdmin() || (isAuthenticated() && !userProfileExists());
         }
       }
       
-      // Rules for user-specific private data
-      match /users/{userId}/{documents=**} {
-        // A user can only read or write their OWN data. Admins can also read user profiles.
-        allow read: if request.auth.uid == userId || isAdmin();
-        allow write: if request.auth.uid == userId;
+      // User profiles - users can read/write their own, admins can read all
+      match /users/{userId}/{document=**} {
+        allow read: if request.auth.uid == userId || isAdmin() || (isAuthenticated() && !userProfileExists());
+        allow write: if request.auth.uid == userId || isAdmin() || (isAuthenticated() && !userProfileExists());
       }
     }
   }
