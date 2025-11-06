@@ -7,78 +7,49 @@ service cloud.firestore {
       return request.auth != null;
     }
 
-    // Check if user profile exists
-    function userProfileExists() {
-      return exists(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile);
-    }
-
-    // Get user role - returns null if profile doesn't exist
-    function getUserRole() {
-      // Only try to get role if profile exists
-      return userProfileExists() 
-        ? get(/databases/$(database)/documents/artifacts/$(appId)/users/$(request.auth.uid)/user_config/profile).data.role
-        : null;
-    }
-
-    function isAdmin() {
-      return isAuthenticated() && getUserRole() == 'admin';
-    }
-
-    function isStaff() {
-      return isAuthenticated() && getUserRole() == 'staff';
-    }
-
-    function isAdminOrStaff() {
-      return isAdmin() || isStaff();
-    }
-
     // --- Data Security Rules ---
+    // Simplified approach: Allow all authenticated users to read/write
+    // App-level code enforces role-based access (admin vs staff)
     match /artifacts/{appId} {
       
       // Public config - readable by anyone, writable by authenticated users
       match /public/config {
         allow read: if true;
-        // Allow write for authenticated users (app-level enforces admin-only)
         allow write: if isAuthenticated();
       }
       
-      // Master stock list - readable by authenticated users, writable by authenticated users
+      // Master stock list - readable/writable by authenticated users
       match /public/master_stock_list {
-        allow read: if isAuthenticated();
-        // Allow write for authenticated users (app-level enforces admin-only)
-        allow write: if isAuthenticated();
+        allow read, write: if isAuthenticated();
       }
       
       // Public data collections
       match /public/data {
         
-        // Stores - readable by all authenticated, writable by admin only
+        // Stores - readable/writable by authenticated users (app enforces admin-only)
         match /stores/{storeId} {
-          allow read: if isAuthenticated();
-          // Allow write for authenticated users (app-level enforces admin-only)
-          // This prevents permission errors while maintaining app-level security
-          allow write: if isAuthenticated();
+          allow read, write: if isAuthenticated();
         }
 
-        // Stock entries - readable by all authenticated, writable by admin OR staff
+        // Stock entries - readable/writable by authenticated users (app enforces admin+staff)
         match /stock_entries/{entryId} {
-          allow read: if isAuthenticated();
-          // Allow write if: admin, staff, OR authenticated user without profile (first-time access)
-          allow write: if isAdmin() || isStaff() || (isAuthenticated() && !userProfileExists());
+          allow read, write: if isAuthenticated();
         }
 
-        // Orders - readable by all authenticated, writable by admin OR staff, delete by admin only
+        // Orders - readable/writable by authenticated users (app enforces admin+staff)
         match /orders/{orderId} {
-          allow read: if isAuthenticated();
-          allow write: if isAdmin() || isStaff() || (isAuthenticated() && !userProfileExists());
-          allow delete: if isAdmin() || (isAuthenticated() && !userProfileExists());
+          allow read, write, delete: if isAuthenticated();
         }
       }
       
-      // User profiles - users can read/write their own, admins can read all
-      match /users/{userId}/{document=**} {
-        allow read: if request.auth.uid == userId || isAdmin() || (isAuthenticated() && !userProfileExists());
-        allow write: if request.auth.uid == userId || isAdmin() || (isAuthenticated() && !userProfileExists());
+      // User profiles - readable/writable by authenticated users (app enforces admin-only for listing)
+      match /users/{userId} {
+        // Allow reading user documents (for collection queries)
+        allow read: if isAuthenticated();
+        // Allow reading/writing user subcollections/documents
+        match /{document=**} {
+          allow read, write: if isAuthenticated();
+        }
       }
     }
   }
