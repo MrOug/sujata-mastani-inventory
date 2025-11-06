@@ -1801,18 +1801,7 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
-                    {/* Logo */}
-                    <div className="text-center mb-8">
-                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                            <User className="w-10 h-10 text-white" />
-                        </div>
-                        <h1 className="text-3xl font-bold font-display text-orange-600">Login</h1>
-                        <p className="text-gray-600 mt-2">Welcome back to Sujata Mastani!</p>
-                    </div>
-
+        <div>
             <form onSubmit={handleSubmit} className="space-y-4">
                         <div>
                             <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -1848,22 +1837,11 @@ const LoginScreen = ({ auth, onLoginSuccess, onSwitchToRegister }) => {
                 <button
                     type="submit"
                     disabled={isLoading}
-                            className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
+                    className="w-full py-3 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-lg shadow-lg transition disabled:opacity-50 flex items-center justify-center"
                 >
-                            {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Log In'}
+                    {isLoading ? <Loader className="animate-spin w-5 h-5 mr-2" /> : 'Log In'}
                 </button>
             </form>
-            
-                    <div className="mt-6 text-center">
-            <button
-                            onClick={onSwitchToRegister}
-                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
-                        >
-                            Need to register? Sign Up
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
@@ -1963,19 +1941,12 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
     };
 
     return (
-        <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
-            <div className="w-full max-w-md">
-                <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
-                    {/* Logo */}
-                    <div className="text-center mb-8">
-                        <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
-                            <UserPlus className="w-10 h-10 text-white" />
-                        </div>
-                        <h1 className="text-3xl font-bold font-display text-orange-600">Register Admin</h1>
-                        <p className="text-gray-600 mt-2">Step {step} of 2</p>
-                    </div>
-
-                    {step === 1 ? (
+        <div className="space-y-4">
+            <div className="text-center mb-4">
+                <p className="text-sm text-gray-600">Step {step} of 2</p>
+            </div>
+            
+            {step === 1 ? (
                         <form onSubmit={handleRequestOTP} className="space-y-4">
                             <div>
                                 <label className="block text-sm font-medium text-gray-700 mb-2">Username</label>
@@ -2091,17 +2062,6 @@ const RegisterScreen = ({ auth, onLoginSuccess, onSwitchToLogin }) => {
                             </button>
                         </form>
                     )}
-
-                    <div className="mt-6 text-center">
-                        <button
-                            onClick={onSwitchToLogin}
-                            className="text-orange-600 hover:text-orange-700 font-medium text-sm"
-                        >
-                            Already have an account? Log In
-                        </button>
-                    </div>
-                </div>
-            </div>
         </div>
     );
 };
@@ -2154,12 +2114,7 @@ const App = () => {
     const [miscStatus, setMiscStatus] = useState(getEmptyMiscStatus()); // Track MISC items stock status
     const [selectedMiscItems, setSelectedMiscItems] = useState({}); // Track which MISC items are selected for ordering
     
-    // Auto-switch to register screen if it's the first user
-    useEffect(() => {
-        if (isFirstUser && authScreen === 'login') {
-            setAuthScreen('register');
-        }
-    }, [isFirstUser, authScreen]);
+    // Removed auto-switch to register - users can choose login or register
     
     // --- Error Handling Utilities ---
     const handleError = (error, context = 'Unknown') => {
@@ -3055,25 +3010,63 @@ const App = () => {
         );
     }
 
-    // If no user is authenticated, show login or register screen
+    // If no user is authenticated, show auth screen with Login and Register options
     if (!userId || !role) {
-        if (authScreen === 'register') {
         return (
-                <RegisterScreen
-                        auth={auth} 
-                        onLoginSuccess={handleAuthSuccess}
-                    onSwitchToLogin={() => setAuthScreen('login')}
-                />
-            );
-        } else {
-            return (
-                <LoginScreen
-                    auth={auth}
-                    onLoginSuccess={handleAuthSuccess}
-                    onSwitchToRegister={() => setAuthScreen('register')}
-                />
-            );
-        }
+            <div className="min-h-screen bg-gradient-to-br from-orange-50 via-white to-orange-100 flex items-center justify-center p-4">
+                <div className="w-full max-w-md">
+                    <div className="bg-white rounded-2xl shadow-2xl p-8 border-2 border-orange-100">
+                        {/* Logo */}
+                        <div className="text-center mb-8">
+                            <div className="w-20 h-20 bg-gradient-to-br from-orange-500 to-orange-600 rounded-full flex items-center justify-center mx-auto mb-4 shadow-lg">
+                                <User className="w-10 h-10 text-white" />
+                            </div>
+                            <h1 className="text-3xl font-bold font-display text-orange-600">Sujata Mastani</h1>
+                            <p className="text-gray-600 mt-2">Inventory Management System</p>
+                        </div>
+
+                        {/* Auth Screen Selection */}
+                        <div className="flex gap-4 mb-6">
+                            <button
+                                onClick={() => setAuthScreen('login')}
+                                className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                    authScreen === 'login'
+                                        ? 'bg-orange-600 text-white shadow-lg'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                            >
+                                Login
+                            </button>
+                            <button
+                                onClick={() => setAuthScreen('register')}
+                                className={`flex-1 py-3 rounded-lg font-bold transition ${
+                                    authScreen === 'register'
+                                        ? 'bg-orange-600 text-white shadow-lg'
+                                        : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                                }`}
+                            >
+                                Register
+                            </button>
+                        </div>
+
+                        {/* Show Login or Register based on selection */}
+                        {authScreen === 'register' ? (
+                            <RegisterScreen
+                                auth={auth}
+                                onLoginSuccess={handleAuthSuccess}
+                                onSwitchToLogin={() => setAuthScreen('login')}
+                            />
+                        ) : (
+                            <LoginScreen
+                                auth={auth}
+                                onLoginSuccess={handleAuthSuccess}
+                                onSwitchToRegister={() => setAuthScreen('register')}
+                            />
+                        )}
+                    </div>
+                </div>
+            </div>
+        );
     }
 
     // If stores haven't loaded yet but user is authenticated, show minimal loading
