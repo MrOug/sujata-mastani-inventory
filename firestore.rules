@@ -49,6 +49,13 @@ service cloud.firestore {
           allow read: if isAuthenticated();    // Any logged-in user can read stock entries (for reports).
           allow write: if isAdmin() || isStaff(); // BOTH admins and staff can save stock.
         }
+
+        // Rules for the 'orders' subcollection (e.g., /public/data/orders/{orderId})
+        match /orders/{orderId} {
+          allow read: if isAuthenticated();    // Any logged-in user can read orders (for order history).
+          allow write: if isAdmin() || isStaff(); // BOTH admins and staff can create orders.
+          allow delete: if isAdmin();           // ONLY admins can delete orders.
+        }
       }
       
       // Rules for user-specific private data
