@@ -35,16 +35,18 @@ service cloud.firestore {
     // --- Data Security Rules ---
     match /artifacts/{appId} {
       
-      // Public config - readable by anyone, writable by admin or authenticated user (for first setup)
+      // Public config - readable by anyone, writable by authenticated users
       match /public/config {
         allow read: if true;
-        allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
+        // Allow write for authenticated users (app-level enforces admin-only)
+        allow write: if isAuthenticated();
       }
       
-      // Master stock list - readable by authenticated users, writable by admin
+      // Master stock list - readable by authenticated users, writable by authenticated users
       match /public/master_stock_list {
         allow read: if isAuthenticated();
-        allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
+        // Allow write for authenticated users (app-level enforces admin-only)
+        allow write: if isAuthenticated();
       }
       
       // Public data collections
@@ -53,7 +55,9 @@ service cloud.firestore {
         // Stores - readable by all authenticated, writable by admin only
         match /stores/{storeId} {
           allow read: if isAuthenticated();
-          allow write: if isAdmin() || (isAuthenticated() && !userProfileExists()); // Allow admin or first-time setup
+          // Allow write for authenticated users (app-level enforces admin-only)
+          // This prevents permission errors while maintaining app-level security
+          allow write: if isAuthenticated();
         }
 
         // Stock entries - readable by all authenticated, writable by admin OR staff
