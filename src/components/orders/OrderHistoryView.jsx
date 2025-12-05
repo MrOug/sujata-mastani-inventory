@@ -70,68 +70,69 @@ const OrderHistoryView = ({ db, appId, selectedStoreId, stores, showToast }) => 
     };
 
     return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
-                <ShoppingCart className="w-6 h-6 mr-3 text-orange-600" /> Order History
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
+                <ShoppingCart className="w-7 h-7 mr-3 text-orange-600" /> Order History
             </h2>
-            <p className="text-sm text-gray-600">
-                View past orders for <span className="font-semibold">{stores[selectedStoreId]?.name}</span>
+            <p className="text-sm text-gray-600 px-1">
+                View past orders for <span className="font-semibold text-orange-600">{stores[selectedStoreId]?.name}</span>
             </p>
 
             {loading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center py-12">
                     <Loader className="animate-spin w-8 h-8 text-orange-600 mr-3" />
-                    <span className="text-gray-600">Loading order history...</span>
+                    <span className="text-gray-600 font-medium">Loading history...</span>
                 </div>
             ) : orders.length === 0 ? (
-                <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-center">
-                    <ShoppingCart className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">No orders found for this store</p>
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <ShoppingCart className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-900 font-bold text-lg">No orders yet</p>
                     <p className="text-sm text-gray-500 mt-2">Orders will appear here once you generate them</p>
                 </div>
             ) : (
                 <div className="space-y-4">
                     {orders.map((order) => (
-                        <div key={order.id} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                            <div className="flex justify-between items-start mb-3">
+                        <div key={order.id} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow">
+                            <div className="flex justify-between items-start mb-4">
                                 <div>
-                                    <p className="text-sm text-gray-500">Ordered on</p>
-                                    <p className="text-base font-semibold text-gray-900">{formatDate(order.orderDate)}</p>
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Ordered on</p>
+                                    <p className="text-base font-bold text-gray-900 mt-0.5">{formatDate(order.orderDate)}</p>
                                 </div>
                                 <div className="text-right">
-                                    <p className="text-sm text-gray-500">Delivery Date</p>
-                                    <p className="text-base font-semibold text-orange-600">
+                                    <p className="text-xs text-gray-500 uppercase tracking-wider font-semibold">Delivery</p>
+                                    <div className="mt-0.5 inline-flex items-center px-2 py-0.5 rounded text-sm font-bold bg-orange-50 text-orange-600 border border-orange-100">
                                         {new Date(order.deliveryDate).toLocaleDateString('en-IN')}
-                                    </p>
+                                    </div>
                                 </div>
                             </div>
 
-                            {order.holidays && order.holidays.length > 0 && (
-                                <div className="mb-2">
-                                    {order.holidays.map((holiday, idx) => (
-                                        <span key={idx} className="inline-block bg-purple-100 text-purple-800 text-xs px-2 py-1 rounded-full mr-2 mb-1">
-                                            🎊 {holiday.name}
-                                        </span>
+                            {/* Info Badges */}
+                            {(order.holidays?.length > 0 || order.weather) && (
+                                <div className="flex flex-wrap gap-2 mb-4 bg-gray-50 p-2 rounded-lg border border-gray-100">
+                                    {order.holidays?.map((holiday, idx) => (
+                                        <div key={idx} className="flex items-center gap-1 text-xs font-semibold text-purple-700 bg-purple-100 px-2 py-1 rounded-md">
+                                            <span>🎊</span> {holiday.name}
+                                        </div>
                                     ))}
+                                    {order.weather && (
+                                        <div className="flex items-center gap-1 text-xs font-semibold text-blue-700 bg-blue-100 px-2 py-1 rounded-md">
+                                            <span>{order.weather.emoji}</span>
+                                            <span>{order.weather.temp || order.weather.mockData?.temp}°C</span>
+                                        </div>
+                                    )}
                                 </div>
                             )}
 
-                            {order.weather && (
-                                <div className="mb-3 flex items-center gap-2 text-sm text-gray-600">
-                                    <span>{order.weather.emoji}</span>
-                                    <span>{order.weather.temp || order.weather.mockData?.temp}°C</span>
-                                    <span className="text-gray-400">•</span>
-                                    <span>{order.weather.description || order.weather.mockData?.description}</span>
+                            <div className="flex items-center justify-between pt-4 border-t border-gray-100">
+                                <div>
+                                    <p className="text-sm text-gray-500">Total Items</p>
+                                    <p className="text-xl font-bold font-display text-gray-900">{getTotalItems(order.orderQuantities)}</p>
                                 </div>
-                            )}
-
-                            <div className="flex items-center justify-between pt-3 border-t border-gray-200">
-                                <p className="text-sm text-gray-600">
-                                    <span className="font-medium">Total Items:</span> {getTotalItems(order.orderQuantities)}
-                                </p>
                                 <button
                                     onClick={() => setSelectedOrder(order)}
-                                    className="px-4 py-2 bg-orange-600 hover:bg-orange-700 text-white text-sm font-bold rounded-lg transition"
+                                    className="px-5 py-2.5 bg-gray-900 hover:bg-black text-white text-sm font-bold rounded-xl transition shadow-lg shadow-gray-200"
                                 >
                                     View Details
                                 </button>

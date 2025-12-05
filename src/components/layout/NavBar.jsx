@@ -5,8 +5,8 @@ const NavButton = ({ icon: Icon, label, isActive, onClick, children }) => (
     <button
         onClick={onClick}
         className={`flex flex-col items-center justify-center p-2 rounded-lg transition-all duration-200 w-full ${isActive
-                ? 'bg-orange-100 text-orange-700'
-                : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
+            ? 'bg-orange-100 text-orange-700'
+            : 'text-gray-500 hover:bg-gray-100 hover:text-gray-700'
             }`}
     >
         {Icon && <Icon className="w-5 h-5 mb-1" />}
@@ -37,9 +37,9 @@ const NavBar = ({ view, setView, role, onLogout }) => {
     ];
 
     return (
-        <nav className="fixed bottom-0 left-0 right-0 bg-white border-t border-gray-200 shadow-lg z-50 safe-area-bottom">
-            <div className="max-w-lg mx-auto">
-                <div className="flex items-center justify-around py-2 px-1">
+        <nav className="fixed bottom-0 left-0 right-0 z-50 flex justify-center pointer-events-none">
+            <div className="bg-white/95 backdrop-blur-md border-t border-gray-200 shadow-[0_-4px_6px_-1px_rgba(0,0,0,0.05)] w-full max-w-lg pointer-events-auto safe-area-bottom">
+                <div className="flex items-center justify-around py-2 px-2">
                     {/* Main Nav Items */}
                     {mainNavItems.map(item => (
                         <NavButton
@@ -73,8 +73,8 @@ const NavBar = ({ view, setView, role, onLogout }) => {
                                                 setShowAdminSubmenu(false);
                                             }}
                                             className={`w-full flex items-center gap-3 px-4 py-2.5 text-left transition ${view === item.id
-                                                    ? 'bg-orange-50 text-orange-700'
-                                                    : 'text-gray-700 hover:bg-gray-50'
+                                                ? 'bg-orange-50 text-orange-700'
+                                                : 'text-gray-700 hover:bg-gray-50'
                                                 }`}
                                         >
                                             <item.icon className="w-4 h-4" />

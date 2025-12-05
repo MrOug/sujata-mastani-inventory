@@ -64,52 +64,57 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
     };
 
     return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
-                <Store className="w-6 h-6 mr-3 text-orange-600" /> Store Management
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
+                <Store className="w-7 h-7 mr-3 text-orange-600" /> Store Management
             </h2>
 
             {/* Add New Store Form */}
-            <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 space-y-4">
-                <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2">Add New Store</h3>
-
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Store Name *</label>
-                    <input
-                        type="text"
-                        value={newStoreName}
-                        onChange={(e) => setNewStoreName(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600"
-                        placeholder="e.g., FC Road"
-                    />
+            <div className="bg-white p-6 rounded-2xl shadow-sm border border-gray-100 space-y-5">
+                <div className="flex items-center gap-2 border-b border-orange-100 pb-3 mb-2">
+                    <Plus className="w-5 h-5 text-orange-600" />
+                    <h3 className="text-lg font-bold text-gray-900">Add New Store</h3>
                 </div>
 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Firm Name</label>
-                    <input
-                        type="text"
-                        value={newStoreFirmName}
-                        onChange={(e) => setNewStoreFirmName(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600"
-                        placeholder="e.g., Sujata Mastani FC Road"
-                    />
-                </div>
+                <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                    <div className="sm:col-span-2">
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Store Name *</label>
+                        <input
+                            type="text"
+                            value={newStoreName}
+                            onChange={(e) => setNewStoreName(e.target.value)}
+                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all font-medium"
+                            placeholder="e.g., FC Road"
+                        />
+                    </div>
 
-                <div>
-                    <label className="block text-sm font-semibold text-gray-700 mb-2">Area Code</label>
-                    <input
-                        type="text"
-                        value={newStoreAreaCode}
-                        onChange={(e) => setNewStoreAreaCode(e.target.value)}
-                        className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600"
-                        placeholder="e.g., FCR"
-                    />
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Firm Name</label>
+                        <input
+                            type="text"
+                            value={newStoreFirmName}
+                            onChange={(e) => setNewStoreFirmName(e.target.value)}
+                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all font-medium"
+                            placeholder="e.g., Sujata Mastani FC Road"
+                        />
+                    </div>
+
+                    <div>
+                        <label className="block text-xs font-bold text-gray-500 uppercase tracking-wide mb-1.5">Area Code</label>
+                        <input
+                            type="text"
+                            value={newStoreAreaCode}
+                            onChange={(e) => setNewStoreAreaCode(e.target.value)}
+                            className="w-full p-3 bg-gray-50 border border-gray-200 rounded-xl focus:ring-2 focus:ring-orange-500 focus:border-orange-500 transition-all font-medium"
+                            placeholder="e.g., FCR"
+                        />
+                    </div>
                 </div>
 
                 <button
                     onClick={handleAddStore}
                     disabled={isAdding}
-                    className="w-full py-3 bg-green-600 hover:bg-green-700 text-white font-bold rounded-xl shadow-lg transition duration-200 flex items-center justify-center disabled:opacity-50"
+                    className="w-full py-3.5 bg-gray-900 hover:bg-black text-white font-bold rounded-xl shadow-lg hover:shadow-xl transition-all duration-200 flex items-center justify-center disabled:opacity-50 mt-2"
                 >
                     {isAdding ? (
                         <Loader className="animate-spin w-5 h-5 mr-2" />
@@ -122,39 +127,55 @@ const StoreManagementView = ({ db, appId, stores, showToast, showConfirm }) => {
 
             {/* Existing Stores */}
             <div className="space-y-4">
-                <h3 className="text-lg font-bold text-gray-900">Existing Stores ({Object.keys(stores).length})</h3>
+                <h3 className="text-lg font-bold text-gray-900 px-1">Existing Stores ({Object.keys(stores).length})</h3>
 
                 {Object.keys(stores).length === 0 ? (
-                    <div className="bg-white p-6 rounded-xl shadow-lg border border-gray-100 text-center">
-                        <Store className="w-12 h-12 text-gray-300 mx-auto mb-3" />
-                        <p className="text-gray-600">No stores added yet</p>
+                    <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                        <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                            <Store className="w-8 h-8 text-gray-400" />
+                        </div>
+                        <p className="text-gray-900 font-medium">No stores added yet</p>
                     </div>
                 ) : (
-                    Object.entries(stores).map(([storeId, storeData]) => (
-                        <div key={storeId} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100 flex items-center justify-between">
-                            <div>
-                                <p className="font-bold text-gray-900">{storeData.name}</p>
-                                {storeData.firmName && storeData.firmName !== storeData.name && (
-                                    <p className="text-sm text-gray-500">🏢 {storeData.firmName}</p>
-                                )}
-                                {storeData.areaCode && (
-                                    <p className="text-xs text-gray-400">Code: {storeData.areaCode}</p>
-                                )}
+                    <div className="grid grid-cols-1 sm:grid-cols-2 gap-4">
+                        {Object.entries(stores).map(([storeId, storeData]) => (
+                            <div key={storeId} className="bg-white p-5 rounded-2xl shadow-sm border border-gray-100 hover:shadow-md transition-shadow group relative overflow-hidden">
+                                <div className="absolute top-0 right-0 w-16 h-16 bg-orange-50 rounded-bl-full -mr-8 -mt-8 opacity-50"></div>
+
+                                <div className="flex justify-between items-start relative z-10">
+                                    <div>
+                                        <p className="font-bold text-lg text-gray-900">{storeData.name}</p>
+                                        <p className="text-xs text-gray-400 mt-0.5 font-mono">{storeId}</p>
+
+                                        <div className="mt-3 space-y-1">
+                                            {storeData.firmName && storeData.firmName !== storeData.name && (
+                                                <p className="text-sm text-gray-600 flex items-center">
+                                                    <span className="w-4 h-4 mr-1.5 opacity-50">🏢</span> {storeData.firmName}
+                                                </p>
+                                            )}
+                                            {storeData.areaCode && (
+                                                <p className="text-sm text-gray-600 flex items-center">
+                                                    <span className="w-4 h-4 mr-1.5 opacity-50">📍</span> {storeData.areaCode}
+                                                </p>
+                                            )}
+                                        </div>
+                                    </div>
+                                    <button
+                                        onClick={() => handleDeleteStore(storeId, storeData.name)}
+                                        disabled={deletingId === storeId}
+                                        className="p-2 -mr-2 -mt-2 text-gray-400 hover:text-red-600 hover:bg-red-50 rounded-lg transition-colors"
+                                        aria-label={`Delete ${storeData.name}`}
+                                    >
+                                        {deletingId === storeId ? (
+                                            <Loader className="animate-spin w-5 h-5 text-red-600" />
+                                        ) : (
+                                            <Trash2 className="w-5 h-5" />
+                                        )}
+                                    </button>
+                                </div>
                             </div>
-                            <button
-                                onClick={() => handleDeleteStore(storeId, storeData.name)}
-                                disabled={deletingId === storeId}
-                                className="p-2 rounded-full text-red-600 hover:bg-red-100 transition duration-150 disabled:opacity-50"
-                                aria-label={`Delete ${storeData.name}`}
-                            >
-                                {deletingId === storeId ? (
-                                    <Loader className="animate-spin w-5 h-5" />
-                                ) : (
-                                    <Trash2 className="w-5 h-5" />
-                                )}
-                            </button>
-                        </div>
-                    ))
+                        ))}
+                    </div>
                 )}
             </div>
         </div>

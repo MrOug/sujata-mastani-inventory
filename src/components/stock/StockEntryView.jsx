@@ -33,41 +33,45 @@ const StockEntryView = ({
     };
 
     return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
-                <List className="w-6 h-6 mr-3 text-orange-600" /> Stock Entry
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
+                <List className="w-7 h-7 mr-3 text-orange-600" /> Stock Entry
             </h2>
-            <p className="text-sm text-gray-500">Entering stock for: <span className="font-semibold text-orange-600">{storeId}</span></p>
 
-            {/* Date Selector */}
-            <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                <label className="block text-sm font-semibold text-gray-700 mb-2">Entry Date</label>
-                <input
-                    type="date"
-                    value={selectedDate}
-                    onChange={(e) => {
-                        if (e.target.value > today) {
-                            showToast('Cannot select future dates', 'error');
-                            return;
-                        }
-                        setSelectedDate(e.target.value);
-                    }}
-                    max={today}
-                    className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600"
-                />
+            {/* Control Bar */}
+            <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
+                <div className="text-sm text-gray-500">
+                    Entering stock for: <span className="font-semibold text-orange-600 block sm:inline sm:ml-1 text-base">{storeId}</span>
+                </div>
+
+                <div className="w-full sm:w-auto">
+                    <input
+                        type="date"
+                        value={selectedDate}
+                        onChange={(e) => {
+                            if (e.target.value > today) {
+                                showToast('Cannot select future dates', 'error');
+                                return;
+                            }
+                            setSelectedDate(e.target.value);
+                        }}
+                        max={today}
+                        className="w-full sm:w-48 p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 text-sm font-medium bg-gray-50 hover:bg-white transition-colors cursor-pointer"
+                    />
+                </div>
             </div>
 
             {/* Summary Card */}
-            <div className="bg-gradient-to-r from-orange-500 to-orange-600 p-4 rounded-xl shadow-lg text-white">
-                <div className="flex justify-between items-center">
-                    <div>
-                        <p className="text-sm opacity-90">Total Items</p>
-                        <p className="text-3xl font-bold">{totalItems}</p>
-                    </div>
-                    <div className="text-right">
-                        <p className="text-sm opacity-90">Total Quantity</p>
-                        <p className="text-3xl font-bold">{totalQuantity}</p>
-                    </div>
+            <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-2xl shadow-lg text-white grid grid-cols-2 gap-8 relative overflow-hidden">
+                <div className="absolute top-0 left-0 w-32 h-32 bg-white/10 rounded-full -ml-16 -mt-16 blur-2xl"></div>
+
+                <div className="relative z-10">
+                    <p className="text-sm opacity-90 font-medium mb-1">Items recorded</p>
+                    <p className="text-4xl font-bold font-display">{totalItems}</p>
+                </div>
+                <div className="text-right relative z-10">
+                    <p className="text-sm opacity-90 font-medium mb-1">Total Quantity</p>
+                    <p className="text-4xl font-bold font-display">{totalQuantity}</p>
                 </div>
             </div>
 
@@ -117,8 +121,8 @@ const StockEntryView = ({
                                                 type="button"
                                                 onClick={() => handleMiscStatusChange(item, 'available')}
                                                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${status === 'available'
-                                                        ? 'bg-green-600 text-white'
-                                                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                                    ? 'bg-green-600 text-white'
+                                                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                                                     }`}
                                             >
                                                 Available
@@ -127,8 +131,8 @@ const StockEntryView = ({
                                                 type="button"
                                                 onClick={() => handleMiscStatusChange(item, 'low')}
                                                 className={`px-3 py-1.5 rounded-lg text-sm font-semibold transition ${status === 'low'
-                                                        ? 'bg-red-600 text-white'
-                                                        : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
+                                                    ? 'bg-red-600 text-white'
+                                                    : 'bg-gray-200 text-gray-600 hover:bg-gray-300'
                                                     }`}
                                             >
                                                 Low Stock

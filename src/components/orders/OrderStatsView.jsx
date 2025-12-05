@@ -96,36 +96,38 @@ const OrderStatsView = ({
     };
 
     return (
-        <div className="p-4 space-y-6">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
-                <BarChart2 className="w-6 h-6 mr-3 text-orange-600" /> Order Statistics
+        <div className="space-y-6">
+            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
+                <BarChart2 className="w-7 h-7 mr-3 text-orange-600" /> Order Statistics
             </h2>
-            <p className="text-sm text-gray-600">
-                View order statistics for <span className="font-semibold">{stores[selectedStoreId]?.name}</span>
+            <p className="text-sm text-gray-600 px-1">
+                View order statistics for <span className="font-semibold text-orange-600">{stores[selectedStoreId]?.name}</span>
             </p>
 
             {loading ? (
-                <div className="flex items-center justify-center py-12">
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 flex items-center justify-center py-12">
                     <Loader className="animate-spin w-8 h-8 text-orange-600 mr-3" />
-                    <span className="text-gray-600">Loading statistics...</span>
+                    <span className="text-gray-600 font-medium">Loading statistics...</span>
                 </div>
             ) : orders.length === 0 ? (
-                <div className="bg-white p-8 rounded-xl shadow-lg border border-gray-100 text-center">
-                    <BarChart2 className="w-16 h-16 text-gray-300 mx-auto mb-4" />
-                    <p className="text-gray-600 font-medium">No order data available</p>
+                <div className="bg-white p-8 rounded-2xl shadow-sm border border-gray-100 text-center py-12">
+                    <div className="w-16 h-16 bg-gray-100 rounded-full flex items-center justify-center mx-auto mb-4">
+                        <BarChart2 className="w-8 h-8 text-gray-400" />
+                    </div>
+                    <p className="text-gray-900 font-bold text-lg">No order data available</p>
                     <p className="text-sm text-gray-500 mt-2">Create some orders to see statistics</p>
                 </div>
             ) : (
                 <>
                     {/* Date Selector */}
-                    <div className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                        <label className="flex items-center text-sm font-semibold text-gray-700 mb-2">
-                            <Calendar className="w-4 h-4 mr-2" /> Select Date
+                    <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-center gap-4">
+                        <label className="flex items-center text-sm font-semibold text-gray-700 whitespace-nowrap">
+                            <Calendar className="w-4 h-4 mr-2 text-orange-600" /> Select Date
                         </label>
                         <select
                             value={selectedDate}
                             onChange={(e) => setSelectedDate(e.target.value)}
-                            className="w-full p-3 border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-600 focus:border-orange-600"
+                            className="w-full sm:w-auto flex-1 p-2.5 border border-gray-200 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-gray-50 text-sm font-medium"
                         >
                             {availableDates.map(date => (
                                 <option key={date} value={date}>{formatDate(date)}</option>
@@ -137,13 +139,15 @@ const OrderStatsView = ({
                     {dateSummary && (
                         <>
                             <div className="grid grid-cols-2 gap-4">
-                                <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-4 rounded-xl shadow-lg text-white">
-                                    <p className="text-sm opacity-90">Total Orders</p>
-                                    <p className="text-3xl font-bold">{dateSummary.totalOrders}</p>
+                                <div className="bg-gradient-to-br from-orange-500 to-orange-600 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl"></div>
+                                    <p className="text-sm opacity-90 font-medium relative z-10">Total Orders</p>
+                                    <p className="text-4xl font-bold font-display mt-1 relative z-10">{dateSummary.totalOrders}</p>
                                 </div>
-                                <div className="bg-gradient-to-br from-green-500 to-green-600 p-4 rounded-xl shadow-lg text-white">
-                                    <p className="text-sm opacity-90">Total Items</p>
-                                    <p className="text-3xl font-bold">{dateSummary.totalItems}</p>
+                                <div className="bg-gradient-to-br from-green-500 to-emerald-600 p-6 rounded-2xl shadow-lg text-white relative overflow-hidden">
+                                    <div className="absolute top-0 right-0 w-24 h-24 bg-white/10 rounded-full -mr-12 -mt-12 blur-xl"></div>
+                                    <p className="text-sm opacity-90 font-medium relative z-10">Total Items</p>
+                                    <p className="text-4xl font-bold font-display mt-1 relative z-10">{dateSummary.totalItems}</p>
                                 </div>
                             </div>
 

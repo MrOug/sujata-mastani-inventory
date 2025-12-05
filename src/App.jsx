@@ -407,34 +407,38 @@ function App() {
                 />
             )}
 
-            {/* Header */}
-            <Header
-                selectedStoreId={selectedStoreId}
-                stores={stores}
-                onStoreChange={setSelectedStoreId}
-                role={role}
-                username={username}
-                isOnline={isOnline}
-            />
-
             {/* Main Content */}
-            <main className="max-w-lg mx-auto">
-                {loadingData ? (
-                    <div className="flex items-center justify-center py-12">
-                        <LoadingSpinner message="Loading data..." />
-                    </div>
-                ) : (
-                    renderViewContent()
-                )}
-            </main>
+            <main className="max-w-lg mx-auto w-full bg-white min-h-screen shadow-2xl relative">
+                {/* Header inside the max-w container for alignment */}
+                <div className="sticky top-0 z-40">
+                    <Header
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        onStoreChange={setSelectedStoreId}
+                        role={role}
+                        username={username}
+                        isOnline={isOnline}
+                    />
+                </div>
 
-            {/* Bottom Navigation */}
-            <NavBar
-                view={view}
-                setView={setView}
-                role={role}
-                onLogout={handleLogout}
-            />
+                <div className="p-4 pb-24">
+                    {loadingData ? (
+                        <div className="flex items-center justify-center py-12">
+                            <LoadingSpinner message="Loading data..." />
+                        </div>
+                    ) : (
+                        renderViewContent()
+                    )}
+                </div>
+
+                {/* Bottom Navigation */}
+                <NavBar
+                    view={view}
+                    setView={setView}
+                    role={role}
+                    onLogout={handleLogout}
+                />
+            </main>
 
             {/* CSS for animations */}
             <style>{`
