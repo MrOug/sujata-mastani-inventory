@@ -75,7 +75,7 @@ const AdminUserManagementView = ({ db, appId, stores, auth, exportStockData, sho
         setIsCreating(true);
         try {
             // Create Firebase Auth user
-            const fakeEmail = `${newUsername.toLowerCase().trim()}@sujata-mastani-inventory.local`;
+            const fakeEmail = `${newUsername.toLowerCase().trim().replace(/[^a-z0-9_]/g, '')}@sujatainventory.local`;
             const userCredential = await createUserWithEmailAndPassword(auth, fakeEmail, newPassword);
 
             // Create user profile in Firestore
