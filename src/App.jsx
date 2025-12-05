@@ -102,6 +102,13 @@ function App() {
         };
     }, []);
 
+    // Redirect staff to stock view only (they can't access other views)
+    useEffect(() => {
+        if (isAuthReady && role === 'staff') {
+            setView('stock');
+        }
+    }, [isAuthReady, role]);
+
     // Save stock data
     const saveStock = useCallback(async () => {
         if (!selectedStoreId || !selectedDate) {

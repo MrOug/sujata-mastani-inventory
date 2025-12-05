@@ -19,13 +19,17 @@ const NavBar = ({ view, setView, role, onLogout }) => {
     const isAdmin = role === 'admin';
     const [showAdminSubmenu, setShowAdminSubmenu] = React.useState(false);
 
-    // Main navigation items for both roles
-    const mainNavItems = [
-        { id: 'home', icon: Home, label: 'Home' },
-        { id: 'stock', icon: List, label: 'Stock' },
-        { id: 'sold', icon: TrendingDown, label: 'Sold' },
-        { id: 'order', icon: ShoppingCart, label: 'Order' },
-    ];
+    // Navigation items - staff only sees Stock Entry
+    const mainNavItems = isAdmin
+        ? [
+            { id: 'home', icon: Home, label: 'Home' },
+            { id: 'stock', icon: List, label: 'Stock' },
+            { id: 'sold', icon: TrendingDown, label: 'Sold' },
+            { id: 'order', icon: ShoppingCart, label: 'Order' },
+        ]
+        : [
+            { id: 'stock', icon: List, label: 'Stock Entry' },
+        ];
 
     // Admin-only items
     const adminNavItems = [
