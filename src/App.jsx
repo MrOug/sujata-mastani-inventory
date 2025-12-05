@@ -133,57 +133,39 @@ function App() {
 
     // Generate order output text
     const generateOrderOutput = useCallback(() => {
-        const storeName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Store';
+        const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Store';
         const areaCode = stores[selectedStoreId]?.areaCode || '';
 
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const deliveryDate = tomorrow.toLocaleDateString('en-IN', {
-            day: '2-digit',
-            month: 'short',
-            year: 'numeric'
-        });
+        let output = `${storeFirmName}\n\n`;
 
-        let output = `📋 ORDER - ${storeName}${areaCode ? ` (${areaCode})` : ''}\n`;
-        output += `📅 Delivery: ${deliveryDate}\n`;
-        output += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
-
+        // Process each category (except MISC which is handled separately)
         CATEGORY_ORDER.forEach(category => {
             const items = masterStockList[category] || [];
-            if (category === 'MISC') return; // Handle separately
+            if (category === 'MISC') return; // Skip MISC for now
+            if (items.length === 0) return; // Skip empty categories
 
-            const categoryItems = items
-                .map(item => {
-                    const key = `${category}-${item}`;
-                    const qty = orderQuantities[key] || 0;
-                    return { item, qty };
-                })
-                .filter(item => item.qty > 0);
+            // Category header (bold for WhatsApp)
+            output += `*${category}*\n\n`;
 
-            if (categoryItems.length > 0) {
-                output += `🏷️ ${category}\n`;
-                categoryItems.forEach(({ item, qty }) => {
-                    output += `   ${item}: ${qty}\n`;
-                });
-                output += `\n`;
-            }
+            // Each item on its own line
+            items.forEach(item => {
+                const key = `${category}-${item}`;
+                const qty = orderQuantities[key] || 0;
+
+                if (qty > 0) {
+                    // Ordered item: show "ItemName - Quantity"
+                    output += `${item} - ${qty}\n`;
+                } else {
+                    // Not ordered: show "ItemName -"
+                    output += `${item} -\n`;
+                }
+            });
+
+            output += `\n`; // Blank line after category
         });
 
-        // MISC items
-        const selectedMiscItemsList = Object.entries(selectedMiscItems)
-            .filter(([_, selected]) => selected)
-            .map(([key]) => key.replace('MISC-', ''));
-
-        if (selectedMiscItemsList.length > 0) {
-            output += `🏷️ MISC (Low Stock)\n`;
-            selectedMiscItemsList.forEach(item => {
-                output += `   ${item}: NEEDED\n`;
-            });
-            output += `\n`;
-        }
-
-        output += `━━━━━━━━━━━━━━━━━━━━━\n`;
-        output += `✅ Order generated at ${new Date().toLocaleTimeString('en-IN')}`;
+        // Add location/area code at the end
+        output += `\n\n${areaCode}`;
 
         return output;
     }, [stores, selectedStoreId, masterStockList, orderQuantities, selectedMiscItems]);
