@@ -1,0 +1,463 @@
+import React, { useState, useEffect, useCallback, useMemo } from 'react';
+import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
+
+// Import services
+import { db, appId, auth } from './services/firebase';
+
+// Import contexts
+import { useAuth } from './context/AuthContext';
+import { useStore } from './context/StoreContext';
+import { useToast } from './context/ToastContext';
+
+// Import components
+import {
+    // Common
+    ToastContainer,
+    ConfirmModal,
+    LoadingSpinner,
+    // Auth
+    LoginScreen,
+    RegisterScreen,
+    // Layout
+    Header,
+    NavBar,
+    HomeView,
+    // Stock
+    StockEntryView,
+    StockSoldView,
+    // Orders
+    OrderingView,
+    OrderHistoryView,
+    OrderStatsView,
+    // Admin
+    StoreManagementView,
+    AdminUserManagementView,
+    ItemManagerView
+} from './components';
+
+// --- Global Constants ---
+const CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
+
+// --- Main Application ---
+function App() {
+    // Auth state from context
+    const {
+        user,
+        userId,
+        role,
+        userStoreId,
+        isAuthReady,
+        isFirstUser,
+        loading: authLoading,
+        logout
+    } = useAuth();
+
+    // Store state from context
+    const {
+        stores,
+        storesLoaded,
+        selectedStoreId,
+        setSelectedStoreId,
+        currentStock,
+        setCurrentStock,
+        yesterdayStock,
+        yesterdayOrderedStock,
+        orderQuantities,
+        setOrderQuantities,
+        selectedDate,
+        setSelectedDate,
+        loadingData,
+        masterStockList,
+        setMasterStockList,
+        miscStatus,
+        setMiscStatus,
+        selectedMiscItems,
+        setSelectedMiscItems,
+        getEmptyStock,
+        calculateSold,
+        soldStockSummary,
+        fetchStockData
+    } = useStore();
+
+    // Toast state from context
+    const { toasts, showToast, removeToast, confirmDialog, showConfirm, closeConfirm } = useToast();
+
+    // Local state
+    const [view, setView] = useState('home');
+    const [isSaving, setIsSaving] = useState(false);
+    const [isOnline, setIsOnline] = useState(navigator.onLine);
+    const [showLogin, setShowLogin] = useState(true);
+
+    // Track online/offline status
+    useEffect(() => {
+        const handleOnline = () => setIsOnline(true);
+        const handleOffline = () => setIsOnline(false);
+
+        window.addEventListener('online', handleOnline);
+        window.addEventListener('offline', handleOffline);
+
+        return () => {
+            window.removeEventListener('online', handleOnline);
+            window.removeEventListener('offline', handleOffline);
+        };
+    }, []);
+
+    // Save stock data
+    const saveStock = useCallback(async () => {
+        if (!selectedStoreId || !selectedDate) {
+            showToast('Please select a store first', 'error');
+            return;
+        }
+
+        setIsSaving(true);
+        try {
+            const stockDocRef = doc(db, `artifacts/${appId}/public/data/stock_entries`, `${selectedStoreId}-${selectedDate}`);
+            await setDoc(stockDocRef, {
+                storeId: selectedStoreId,
+                date: selectedDate,
+                stock: currentStock,
+                miscStatus: miscStatus,
+                updatedAt: new Date().toISOString(),
+                updatedBy: userId
+            });
+
+            showToast('Stock saved successfully!', 'success');
+            await fetchStockData(selectedStoreId);
+        } catch (error) {
+            console.error('Error saving stock:', error);
+            showToast(`Failed to save stock: ${error.message}`, 'error');
+        } finally {
+            setIsSaving(false);
+        }
+    }, [selectedStoreId, selectedDate, currentStock, miscStatus, userId, showToast, fetchStockData]);
+
+    // Generate order output text
+    const generateOrderOutput = useCallback(() => {
+        const storeName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Store';
+        const areaCode = stores[selectedStoreId]?.areaCode || '';
+
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const deliveryDate = tomorrow.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: 'short',
+            year: 'numeric'
+        });
+
+        let output = `📋 ORDER - ${storeName}${areaCode ? ` (${areaCode})` : ''}\n`;
+        output += `📅 Delivery: ${deliveryDate}\n`;
+        output += `━━━━━━━━━━━━━━━━━━━━━\n\n`;
+
+        CATEGORY_ORDER.forEach(category => {
+            const items = masterStockList[category] || [];
+            if (category === 'MISC') return; // Handle separately
+
+            const categoryItems = items
+                .map(item => {
+                    const key = `${category}-${item}`;
+                    const qty = orderQuantities[key] || 0;
+                    return { item, qty };
+                })
+                .filter(item => item.qty > 0);
+
+            if (categoryItems.length > 0) {
+                output += `🏷️ ${category}\n`;
+                categoryItems.forEach(({ item, qty }) => {
+                    output += `   ${item}: ${qty}\n`;
+                });
+                output += `\n`;
+            }
+        });
+
+        // MISC items
+        const selectedMiscItemsList = Object.entries(selectedMiscItems)
+            .filter(([_, selected]) => selected)
+            .map(([key]) => key.replace('MISC-', ''));
+
+        if (selectedMiscItemsList.length > 0) {
+            output += `🏷️ MISC (Low Stock)\n`;
+            selectedMiscItemsList.forEach(item => {
+                output += `   ${item}: NEEDED\n`;
+            });
+            output += `\n`;
+        }
+
+        output += `━━━━━━━━━━━━━━━━━━━━━\n`;
+        output += `✅ Order generated at ${new Date().toLocaleTimeString('en-IN')}`;
+
+        return output;
+    }, [stores, selectedStoreId, masterStockList, orderQuantities, selectedMiscItems]);
+
+    // Export stock data
+    const exportStockData = useCallback(async () => {
+        try {
+            const stockColRef = collection(db, `artifacts/${appId}/public/data/stock_entries`);
+            const snapshot = await getDocs(stockColRef);
+
+            const data = [];
+            snapshot.forEach(doc => {
+                data.push({ id: doc.id, ...doc.data() });
+            });
+
+            const blob = new Blob([JSON.stringify(data, null, 2)], { type: 'application/json' });
+            const url = URL.createObjectURL(blob);
+            const a = document.createElement('a');
+            a.href = url;
+            a.download = `stock-data-${new Date().toISOString().slice(0, 10)}.json`;
+            a.click();
+            URL.revokeObjectURL(url);
+
+            showToast('Stock data exported!', 'success');
+        } catch (error) {
+            console.error('Export error:', error);
+            showToast('Failed to export data', 'error');
+        }
+    }, [showToast]);
+
+    // Handle logout
+    const handleLogout = useCallback(async () => {
+        const confirmed = await showConfirm({
+            title: 'Logout',
+            message: 'Are you sure you want to logout?',
+            confirmText: 'Logout',
+            cancelText: 'Cancel'
+        });
+
+        if (confirmed) {
+            await logout();
+            setView('home');
+        }
+    }, [logout, showConfirm]);
+
+    // --- Render Logic ---
+
+    // Loading state
+    if (authLoading || !isAuthReady) {
+        return <LoadingSpinner message="Initializing..." />;
+    }
+
+    // Not logged in - show login/register
+    if (!user) {
+        if (isFirstUser) {
+            return <RegisterScreen onSwitchToLogin={() => setShowLogin(true)} />;
+        }
+        return showLogin
+            ? <LoginScreen onSwitchToRegister={() => setShowLogin(false)} />
+            : <RegisterScreen onSwitchToLogin={() => setShowLogin(true)} />;
+    }
+
+    // Loading stores
+    if (!storesLoaded) {
+        return <LoadingSpinner message="Loading stores..." />;
+    }
+
+    // Render view content
+    const renderViewContent = () => {
+        switch (view) {
+            case 'home':
+                return (
+                    <HomeView
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        setView={setView}
+                        soldStockSummary={soldStockSummary}
+                    />
+                );
+
+            case 'stock':
+                return (
+                    <StockEntryView
+                        storeId={selectedStoreId}
+                        stockData={currentStock}
+                        setStockData={setCurrentStock}
+                        saveStock={saveStock}
+                        isSaving={isSaving}
+                        selectedDate={selectedDate}
+                        setSelectedDate={setSelectedDate}
+                        showToast={showToast}
+                        masterStockList={masterStockList}
+                        miscStatus={miscStatus}
+                        setMiscStatus={setMiscStatus}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
+                    />
+                );
+
+            case 'sold':
+                return (
+                    <StockSoldView
+                        currentStock={currentStock}
+                        yesterdayOrderedStock={yesterdayOrderedStock}
+                        calculateSold={calculateSold}
+                        soldStockSummary={soldStockSummary}
+                        masterStockList={masterStockList}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
+                    />
+                );
+
+            case 'order':
+                return (
+                    <OrderingView
+                        currentStock={currentStock}
+                        orderQuantities={orderQuantities}
+                        setOrderQuantities={setOrderQuantities}
+                        generateOrderOutput={generateOrderOutput}
+                        showToast={showToast}
+                        masterStockList={masterStockList}
+                        db={db}
+                        appId={appId}
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        miscStatus={miscStatus}
+                        selectedMiscItems={selectedMiscItems}
+                        setSelectedMiscItems={setSelectedMiscItems}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
+                    />
+                );
+
+            case 'order-history':
+                return (
+                    <OrderHistoryView
+                        db={db}
+                        appId={appId}
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        showToast={showToast}
+                    />
+                );
+
+            case 'order-stats':
+                return (
+                    <OrderStatsView
+                        db={db}
+                        appId={appId}
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        showToast={showToast}
+                        masterStockList={masterStockList}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
+                    />
+                );
+
+            case 'stores':
+                return (
+                    <StoreManagementView
+                        db={db}
+                        appId={appId}
+                        stores={stores}
+                        showToast={showToast}
+                        showConfirm={showConfirm}
+                    />
+                );
+
+            case 'users':
+                return (
+                    <AdminUserManagementView
+                        db={db}
+                        appId={appId}
+                        stores={stores}
+                        auth={auth}
+                        exportStockData={exportStockData}
+                        showToast={showToast}
+                        showConfirm={showConfirm}
+                    />
+                );
+
+            case 'items':
+                return (
+                    <ItemManagerView
+                        db={db}
+                        appId={appId}
+                        masterStockList={masterStockList}
+                        setMasterStockList={setMasterStockList}
+                        showToast={showToast}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
+                    />
+                );
+
+            default:
+                return (
+                    <HomeView
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        setView={setView}
+                        soldStockSummary={soldStockSummary}
+                    />
+                );
+        }
+    };
+
+    // Get username for header
+    const username = user?.email?.split('@')[0] || 'User';
+
+    return (
+        <div className="min-h-screen bg-gray-50 pb-20">
+            {/* Toast Notifications */}
+            <ToastContainer toasts={toasts} removeToast={removeToast} />
+
+            {/* Confirmation Dialog */}
+            {confirmDialog && (
+                <ConfirmModal
+                    title={confirmDialog.title}
+                    message={confirmDialog.message}
+                    confirmText={confirmDialog.confirmText}
+                    cancelText={confirmDialog.cancelText}
+                    confirmColor={confirmDialog.confirmColor}
+                    onConfirm={confirmDialog.onConfirm}
+                    onCancel={confirmDialog.onCancel}
+                />
+            )}
+
+            {/* Header */}
+            <Header
+                selectedStoreId={selectedStoreId}
+                stores={stores}
+                onStoreChange={setSelectedStoreId}
+                role={role}
+                username={username}
+                isOnline={isOnline}
+            />
+
+            {/* Main Content */}
+            <main className="max-w-lg mx-auto">
+                {loadingData ? (
+                    <div className="flex items-center justify-center py-12">
+                        <LoadingSpinner message="Loading data..." />
+                    </div>
+                ) : (
+                    renderViewContent()
+                )}
+            </main>
+
+            {/* Bottom Navigation */}
+            <NavBar
+                view={view}
+                setView={setView}
+                role={role}
+                onLogout={handleLogout}
+            />
+
+            {/* CSS for animations */}
+            <style>{`
+                @keyframes fadeIn {
+                    from { opacity: 0; }
+                    to { opacity: 1; }
+                }
+                @keyframes slideUp {
+                    from { transform: translateY(20px); opacity: 0; }
+                    to { transform: translateY(0); opacity: 1; }
+                }
+                @keyframes slideIn {
+                    from { transform: translateX(100%); opacity: 0; }
+                    to { transform: translateX(0); opacity: 1; }
+                }
+                .animate-fadeIn { animation: fadeIn 0.2s ease-out; }
+                .animate-slideUp { animation: slideUp 0.3s ease-out; }
+                .animate-slideIn { animation: slideIn 0.3s ease-out; }
+                .font-display { font-family: 'Outfit', system-ui, sans-serif; }
+                .safe-area-bottom { padding-bottom: env(safe-area-inset-bottom); }
+            `}</style>
+        </div>
+    );
+}
+
+export default App;
