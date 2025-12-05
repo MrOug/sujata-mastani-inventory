@@ -1,4 +1,5 @@
 import React from 'react';
+import { TrendingDown } from 'lucide-react';
 
 const getTodayDate = () => new Date().toISOString().slice(0, 10);
 
