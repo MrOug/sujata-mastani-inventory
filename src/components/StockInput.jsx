@@ -19,16 +19,21 @@ const StockInput = ({ label, value, onChange, category, item }) => {
         </button>
         <input
           type="number"
-          inputMode="numeric"
-          pattern="[0-9]*"
+          inputMode="decimal"
+          step="0.01"
           value={value === 0 || value === '' ? '' : value}
           onChange={(e) => {
-            const val = e.target.value === '' ? 0 : parseInt(e.target.value, 10);
+            const inputVal = e.target.value;
+            if (inputVal === '' || inputVal === '-') {
+              onChange(0);
+              return;
+            }
+            const val = parseFloat(inputVal);
             if (!isNaN(val) && val >= 0 && val <= 1000) {
               onChange(val);
             }
           }}
-          className="w-16 h-9 text-center text-lg font-bold border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white"
+          className="w-20 h-9 text-center text-lg font-bold border border-gray-300 rounded-lg focus:ring-2 focus:ring-orange-500 focus:border-orange-500 bg-white"
           min="0"
           max="1000"
           aria-label={`Quantity for ${label}`}
@@ -47,3 +52,4 @@ const StockInput = ({ label, value, onChange, category, item }) => {
 };
 
 export default StockInput;
+
