@@ -1,0 +1,217 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Delete All Firebase Users</title>
+    <style>
+        body {
+            font-family: 'Segoe UI', Tahoma, Geneva, Verdana, sans-serif;
+            max-width: 800px;
+            margin: 50px auto;
+            padding: 20px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+        }
+        .container {
+            background: white;
+            border-radius: 10px;
+            padding: 30px;
+            box-shadow: 0 10px 40px rgba(0,0,0,0.3);
+        }
+        h1 {
+            color: #333;
+            text-align: center;
+            margin-bottom: 30px;
+        }
+        .warning {
+            background: #fff3cd;
+            border: 2px solid #ffc107;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #856404;
+        }
+        .success {
+            background: #d4edda;
+            border: 2px solid #28a745;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #155724;
+        }
+        .error {
+            background: #f8d7da;
+            border: 2px solid #dc3545;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            color: #721c24;
+        }
+        button {
+            background: #dc3545;
+            color: white;
+            border: none;
+            padding: 15px 30px;
+            font-size: 16px;
+            border-radius: 5px;
+            cursor: pointer;
+            width: 100%;
+            margin: 10px 0;
+            transition: all 0.3s;
+        }
+        button:hover {
+            background: #c82333;
+            transform: translateY(-2px);
+            box-shadow: 0 5px 15px rgba(220, 53, 69, 0.3);
+        }
+        button:disabled {
+            background: #6c757d;
+            cursor: not-allowed;
+            transform: none;
+        }
+        #log {
+            background: #f8f9fa;
+            border: 1px solid #dee2e6;
+            border-radius: 5px;
+            padding: 15px;
+            margin: 20px 0;
+            max-height: 400px;
+            overflow-y: auto;
+            font-family: 'Courier New', monospace;
+            font-size: 14px;
+            display: none;
+        }
+        #log.show {
+            display: block;
+        }
+        .log-entry {
+            margin: 5px 0;
+            padding: 5px;
+        }
+        .log-success { color: #28a745; }
+        .log-error { color: #dc3545; }
+        .log-info { color: #17a2b8; }
+        .spinner {
+            border: 4px solid #f3f3f3;
+            border-top: 4px solid #dc3545;
+            border-radius: 50%;
+            width: 40px;
+            height: 40px;
+            animation: spin 1s linear infinite;
+            margin: 20px auto;
+            display: none;
+        }
+        .spinner.show {
+            display: block;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>🗑️ Delete All Firebase Users</h1>
+        
+        <div class="warning">
+            <strong>⚠️ WARNING:</strong> This will permanently delete ALL user accounts from your Firebase Authentication.
+            This action cannot be undone!
+        </div>
+
+        <button id="deleteBtn" onclick="deleteAllUsers()">
+            🗑️ Delete All Users
+        </button>
+
+        <div class="spinner" id="spinner"></div>
+        <div id="log"></div>
+        <div id="result"></div>
+    </div>
+
+    <script type="module">
+        import { initializeApp } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-app.js';
+        import { getAuth, signInWithEmailAndPassword } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-auth.js';
+        import { getFunctions, httpsCallable } from 'https://www.gstatic.com/firebasejs/10.8.0/firebase-functions.js';
+
+        const firebaseConfig = {
+            apiKey: "AIzaSyDZt6n1QSGLq_PyLDYQlayFwMK0Qv7gpmE",
+            authDomain: "sujata-inventory.firebaseapp.com",
+            projectId: "sujata-inventory",
+            storageBucket: "sujata-inventory.firebasestorage.app",
+            messagingSenderId: "527916478889",
+            appId: "1:527916478889:web:7043c7d45087ee452bd4b8"
+        };
+
+        const app = initializeApp(firebaseConfig);
+        const auth = getAuth(app);
+
+        function addLog(message, type = 'info') {
+            const log = document.getElementById('log');
+            log.classList.add('show');
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `${new Date().toLocaleTimeString()} - ${message}`;
+            log.appendChild(entry);
+            log.scrollTop = log.scrollHeight;
+        }
+
+        window.deleteAllUsers = async function() {
+            const btn = document.getElementById('deleteBtn');
+            const spinner = document.getElementById('spinner');
+            const result = document.getElementById('result');
+            const log = document.getElementById('log');
+            
+            if (!confirm('Are you absolutely sure you want to delete ALL users? Type "DELETE" in the next prompt to confirm.')) {
+                return;
+            }
+            
+            const confirmation = prompt('Type DELETE to confirm:');
+            if (confirmation !== 'DELETE') {
+                result.innerHTML = '<div class="error">Deletion cancelled.</div>';
+                return;
+            }
+
+            btn.disabled = true;
+            spinner.classList.add('show');
+            log.innerHTML = '';
+            log.classList.add('show');
+            result.innerHTML = '';
+
+            addLog('Starting user deletion process...', 'info');
+            
+            try {
+                // Unfortunately, the Firebase Client SDK doesn't allow listing/deleting other users
+                // Only the Admin SDK can do this, which requires server-side code
+                
+                addLog('ERROR: Client SDK cannot delete other users', 'error');
+                addLog('This operation requires Firebase Admin SDK (server-side)', 'error');
+                
+                result.innerHTML = `
+                    <div class="error">
+                        <strong>❌ Cannot Delete Users from Client</strong>
+                        <p>Firebase security rules prevent deleting users from the browser.</p>
+                        <p><strong>Please use one of these methods instead:</strong></p>
+                        <ol>
+                            <li><strong>Firebase Console</strong> (Recommended):
+                                <br>Go to: <a href="https://console.firebase.google.com/project/sujata-inventory/authentication/users" target="_blank">Firebase Console - Users</a>
+                                <br>• Click on each user individually
+                                <br>• Click the "Delete account" button
+                            </li>
+                            <li><strong>Contact me</strong> and I'll provide a server-side solution</li>
+                        </ol>
+                    </div>
+                `;
+                
+            } catch (error) {
+                addLog(`Error: ${error.message}`, 'error');
+                result.innerHTML = `<div class="error"><strong>Error:</strong> ${error.message}</div>`;
+            } finally {
+                btn.disabled = false;
+                spinner.classList.remove('show');
+            }
+        }
+    </script>
+</body>
+</html>
+

@@ -1,0 +1,23 @@
+{
+  "name": "Sujata Mastani Inventory",
+  "short_name": "SM Inventory",
+  "description": "Stock management system for Sujata Mastani outlets",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#ffffff",
+  "theme_color": "#ea580c",
+  "orientation": "portrait",
+  "scope": "/",
+  "icons": [
+    {
+      "src": "/favicon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any"
+    }
+  ],
+  "categories": [
+    "business",
+    "productivity"
+  ]
+}
