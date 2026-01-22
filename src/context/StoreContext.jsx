@@ -149,7 +149,7 @@ export const StoreProvider = ({ children }) => {
 
     // Fetch master stock list
     useEffect(() => {
-        if (!db || !isAuthReady) return;
+        if (!db || !isAuthReady || !userId) return;
 
         const listDocRef = doc(db, `artifacts/${appId}/public`, 'master_stock_list');
 
@@ -174,7 +174,8 @@ export const StoreProvider = ({ children }) => {
         });
 
         return () => unsubscribeList();
-    }, [db, appId, isAuthReady]);
+    }, [db, appId, isAuthReady, userId]);
+
 
     // Update misc status when master list changes
     useEffect(() => {
