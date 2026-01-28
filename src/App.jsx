@@ -411,13 +411,20 @@ function App() {
                 </div>
 
                 <div className="p-4 pb-24">
-                    {loadingData ? (
+                    {/* Loading overlay - doesn't unmount content for admin views */}
+                    {loadingData && !['items', 'users', 'stores', 'order-stats', 'order-history'].includes(view) && (
                         <div className="flex items-center justify-center py-12">
                             <LoadingSpinner message="Loading data..." />
                         </div>
-                    ) : (
-                        renderViewContent()
                     )}
+                    {/* Always render content, but hide if loading (except admin views) */}
+                    <div style={{
+                        display: (loadingData && !['items', 'users', 'stores', 'order-stats', 'order-history'].includes(view))
+                            ? 'none'
+                            : 'block'
+                    }}>
+                        {renderViewContent()}
+                    </div>
                 </div>
 
                 {/* Bottom Navigation */}
