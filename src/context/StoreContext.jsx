@@ -266,7 +266,7 @@ export const StoreProvider = ({ children }) => {
         }
     }, [selectedStoreId, stores]);
 
-    const value = {
+    const value = useMemo(() => ({
         // Stores
         stores,
         storesLoaded,
@@ -303,7 +303,12 @@ export const StoreProvider = ({ children }) => {
         fetchStockData,
         getTodayDate,
         getYesterdayDate
-    };
+    }), [
+        stores, storesLoaded, selectedStoreId,
+        currentStock, yesterdayStock, yesterdayOrderedStock, orderQuantities, selectedDate, loadingData,
+        masterStockList, miscStatus, selectedMiscItems,
+        getEmptyStock, getEmptyMiscStatus, calculateSold, soldStockSummary, fetchStockData
+    ]);
 
     return (
         <StoreContext.Provider value={value}>

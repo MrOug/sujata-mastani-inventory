@@ -19,12 +19,12 @@ const ItemManagerView = ({
     const hasLocalChangesRef = useRef(false);
 
     // Sync localList when masterStockList changes from Firestore
-    // Only sync if there are no unsaved local changes
-    useEffect(() => {
-        if (!hasLocalChangesRef.current) {
-            setLocalList(masterStockList);
-        }
-    }, [masterStockList]);
+    // DISABLED: Prevents overwriting local work. User can reset manually if needed.
+    // useEffect(() => {
+    //     if (!hasLocalChangesRef.current) {
+    //         setLocalList(masterStockList);
+    //     }
+    // }, [masterStockList]);
 
 
     const handleAddItem = () => {
