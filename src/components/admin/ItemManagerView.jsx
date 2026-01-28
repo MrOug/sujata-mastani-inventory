@@ -203,9 +203,9 @@ const ItemManagerView = ({
                 })}
             </div>
 
-            {/* Save Button */}
+            {/* Save Button - positioned above the bottom navigation */}
             {hasChanges && (
-                <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-50">
+                <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-[100]">
                     <div className="flex gap-2">
                         <button
                             onClick={handleResetChanges}
