@@ -1,5 +1,5 @@
 import React, { useState, useEffect, useRef } from 'react';
-import { Package, Plus, Trash2, Loader, Save, RotateCcw } from 'lucide-react';
+import { Package, Plus, Trash2, Loader, Save, RotateCcw, AlertCircle } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 
 const ItemManagerView = ({
@@ -15,7 +15,7 @@ const ItemManagerView = ({
     const [isSaving, setIsSaving] = useState(false);
     const [localList, setLocalList] = useState(masterStockList);
 
-    // Track if user has unsaved local changes - prevents Firestore sync from overwriting
+    // Track if user has unsaved local changes
     const hasLocalChangesRef = useRef(false);
 
     // Sync localList when masterStockList changes from Firestore
@@ -26,9 +26,7 @@ const ItemManagerView = ({
         }
     }, [masterStockList]);
 
-
     const handleAddItem = () => {
-        console.log('Attempting to add item:', newItem);
         if (!newItem.trim()) {
             showToast('Please enter an item name', 'error');
             return;
@@ -37,48 +35,27 @@ const ItemManagerView = ({
         const category = selectedCategory;
         const currentItems = localList[category] || [];
 
-        console.log('Current items in category:', category, currentItems);
-
         if (currentItems.includes(newItem.trim())) {
             showToast('Item already exists in this category', 'error');
             return;
         }
 
-        try {
-            hasLocalChangesRef.current = true;
-            setLocalList(prev => {
-                const updated = {
-                    ...prev,
-                    [category]: [...(prev[category] || []), newItem.trim()]
-                };
-                console.log('Updated local list:', updated);
-                return updated;
-            });
-            setNewItem('');
-            showToast(`"${newItem.trim()}" added to ${category}`, 'success');
-        } catch (error) {
-            console.error('Error adding item:', error);
-            showToast('Error adding item', 'error');
-        }
+        hasLocalChangesRef.current = true;
+        setLocalList(prev => ({
+            ...prev,
+            [category]: [...(prev[category] || []), newItem.trim()]
+        }));
+        setNewItem('');
+        showToast(`"${newItem.trim()}" added to ${category}`, 'success');
     };
 
     const handleRemoveItem = (category, itemToRemove) => {
-        console.log('Attempting to remove item:', itemToRemove, 'from', category);
-        try {
-            hasLocalChangesRef.current = true;
-            setLocalList(prev => {
-                const updated = {
-                    ...prev,
-                    [category]: (prev[category] || []).filter(item => item !== itemToRemove)
-                };
-                console.log('Updated local list after remove:', updated);
-                return updated;
-            });
-            showToast(`"${itemToRemove}" removed from ${category}`, 'success');
-        } catch (error) {
-            console.error('Error removing item:', error);
-            showToast('Error removing item', 'error');
-        }
+        hasLocalChangesRef.current = true;
+        setLocalList(prev => ({
+            ...prev,
+            [category]: (prev[category] || []).filter(item => item !== itemToRemove)
+        }));
+        showToast(`"${itemToRemove}" removed from ${category}`, 'success');
     };
 
     const handleResetChanges = () => {
@@ -96,7 +73,7 @@ const ItemManagerView = ({
                 lastUpdated: new Date().toISOString()
             });
 
-            hasLocalChangesRef.current = false; // Reset after successful save
+            hasLocalChangesRef.current = false;
             setMasterStockList(localList);
             showToast('Master stock list saved successfully!', 'success');
         } catch (error) {
@@ -110,10 +87,19 @@ const ItemManagerView = ({
     const hasChanges = JSON.stringify(localList) !== JSON.stringify(masterStockList);
 
     return (
-        <div className="space-y-6 pb-20">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
-                <Package className="w-7 h-7 mr-3 text-orange-600" /> Item Manager
-            </h2>
+        <div className="space-y-6 pb-32">
+            {/* Header with change indicator */}
+            <div className="flex items-center justify-between px-1">
+                <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
+                    <Package className="w-7 h-7 mr-3 text-orange-600" /> Item Manager
+                </h2>
+                {hasChanges && (
+                    <span className="flex items-center gap-1 px-3 py-1 bg-orange-100 text-orange-700 text-sm font-bold rounded-full animate-pulse">
+                        <AlertCircle className="w-4 h-4" />
+                        Unsaved Changes
+                    </span>
+                )}
+            </div>
             <p className="text-sm text-gray-600 px-1">Manage the master list of stock items across all categories.</p>
 
             {/* Add New Item */}
@@ -203,33 +189,34 @@ const ItemManagerView = ({
                 })}
             </div>
 
-            {/* Save Button - positioned above the bottom navigation */}
-            {hasChanges && (
-                <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-[100]">
-                    <div className="flex gap-2">
-                        <button
-                            onClick={handleResetChanges}
-                            disabled={isSaving}
-                            className="flex-shrink-0 py-4 px-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-2xl shadow-2xl transition-all flex items-center justify-center disabled:opacity-50 ring-4 ring-white"
-                            title="Discard Changes"
-                        >
-                            <RotateCcw className="w-6 h-6" />
-                        </button>
-                        <button
-                            onClick={handleSaveAll}
-                            disabled={isSaving}
-                            className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-2xl shadow-2xl hover:shadow-orange-500/20 transition-all flex items-center justify-center disabled:opacity-50 ring-4 ring-white"
-                        >
-                            {isSaving ? (
-                                <Loader className="animate-spin w-6 h-6 mr-2" />
-                            ) : (
-                                <Save className="w-6 h-6 mr-2" />
-                            )}
-                            Save All Changes
-                        </button>
-                    </div>
+            {/* Save Section - Always visible */}
+            <div className="fixed bottom-24 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-[100]">
+                <div className="flex gap-2">
+                    <button
+                        onClick={handleResetChanges}
+                        disabled={!hasChanges || isSaving}
+                        className="flex-shrink-0 py-4 px-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-2xl shadow-2xl transition-all flex items-center justify-center disabled:opacity-30 disabled:cursor-not-allowed ring-4 ring-white"
+                        title="Discard Changes"
+                    >
+                        <RotateCcw className="w-6 h-6" />
+                    </button>
+                    <button
+                        onClick={handleSaveAll}
+                        disabled={!hasChanges || isSaving}
+                        className={`flex-1 py-4 font-bold rounded-2xl shadow-2xl transition-all flex items-center justify-center ring-4 ring-white ${hasChanges
+                                ? 'bg-orange-600 hover:bg-orange-700 text-white'
+                                : 'bg-gray-300 text-gray-500 cursor-not-allowed'
+                            }`}
+                    >
+                        {isSaving ? (
+                            <Loader className="animate-spin w-6 h-6 mr-2" />
+                        ) : (
+                            <Save className="w-6 h-6 mr-2" />
+                        )}
+                        {hasChanges ? 'Save All Changes' : 'No Changes'}
+                    </button>
                 </div>
-            )}
+            </div>
         </div>
     );
 };

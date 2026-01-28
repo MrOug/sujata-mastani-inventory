@@ -1,5 +1,5 @@
 import React from 'react';
-import { Home, List, TrendingDown, ShoppingCart, Settings, Users, Store, Package, BarChart2, History, LogOut, ChevronDown } from 'lucide-react';
+import { Home, List, TrendingDown, ShoppingCart, Settings, Users, Store, Package, BarChart2, History, LogOut, ChevronDown, ClipboardCheck } from 'lucide-react';
 
 const NavButton = ({ icon: Icon, label, isActive, onClick, children }) => (
     <button
@@ -19,16 +19,18 @@ const NavBar = ({ view, setView, role, onLogout }) => {
     const isAdmin = role === 'admin';
     const [showAdminSubmenu, setShowAdminSubmenu] = React.useState(false);
 
-    // Navigation items - staff only sees Stock Entry
+    // Navigation items - staff sees Stock Entry and Verify
     const mainNavItems = isAdmin
         ? [
             { id: 'home', icon: Home, label: 'Home' },
             { id: 'stock', icon: List, label: 'Stock' },
             { id: 'sold', icon: TrendingDown, label: 'Sold' },
             { id: 'order', icon: ShoppingCart, label: 'Order' },
+            { id: 'verify', icon: ClipboardCheck, label: 'Verify' },
         ]
         : [
-            { id: 'stock', icon: List, label: 'Stock Entry' },
+            { id: 'stock', icon: List, label: 'Stock' },
+            { id: 'verify', icon: ClipboardCheck, label: 'Verify' },
         ];
 
     // Admin-only items

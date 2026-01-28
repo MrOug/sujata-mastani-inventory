@@ -25,6 +25,7 @@ import {
     // Stock
     StockEntryView,
     StockSoldView,
+    VerifyStockView,
     // Orders
     OrderingView,
     OrderHistoryView,
@@ -348,6 +349,19 @@ function App() {
                         exportStockData={exportStockData}
                         showToast={showToast}
                         showConfirm={showConfirm}
+                    />
+                );
+
+            case 'verify':
+                return (
+                    <VerifyStockView
+                        db={db}
+                        appId={appId}
+                        selectedStoreId={selectedStoreId}
+                        stores={stores}
+                        showToast={showToast}
+                        masterStockList={masterStockList}
+                        CATEGORY_ORDER={CATEGORY_ORDER}
                     />
                 );
 
