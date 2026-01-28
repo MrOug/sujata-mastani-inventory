@@ -28,33 +28,57 @@ const ItemManagerView = ({
 
 
     const handleAddItem = () => {
+        console.log('Attempting to add item:', newItem);
         if (!newItem.trim()) {
             showToast('Please enter an item name', 'error');
             return;
         }
 
-        const currentItems = localList[selectedCategory] || [];
+        const category = selectedCategory;
+        const currentItems = localList[category] || [];
+
+        console.log('Current items in category:', category, currentItems);
+
         if (currentItems.includes(newItem.trim())) {
             showToast('Item already exists in this category', 'error');
             return;
         }
 
-        hasLocalChangesRef.current = true; // Mark as having local changes
-        setLocalList(prev => ({
-            ...prev,
-            [selectedCategory]: [...(prev[selectedCategory] || []), newItem.trim()]
-        }));
-        setNewItem('');
-        showToast(`"${newItem.trim()}" added to ${selectedCategory}`, 'success');
+        try {
+            hasLocalChangesRef.current = true;
+            setLocalList(prev => {
+                const updated = {
+                    ...prev,
+                    [category]: [...(prev[category] || []), newItem.trim()]
+                };
+                console.log('Updated local list:', updated);
+                return updated;
+            });
+            setNewItem('');
+            showToast(`"${newItem.trim()}" added to ${category}`, 'success');
+        } catch (error) {
+            console.error('Error adding item:', error);
+            showToast('Error adding item', 'error');
+        }
     };
 
     const handleRemoveItem = (category, itemToRemove) => {
-        hasLocalChangesRef.current = true; // Mark as having local changes
-        setLocalList(prev => ({
-            ...prev,
-            [category]: (prev[category] || []).filter(item => item !== itemToRemove)
-        }));
-        showToast(`"${itemToRemove}" removed from ${category}`, 'success');
+        console.log('Attempting to remove item:', itemToRemove, 'from', category);
+        try {
+            hasLocalChangesRef.current = true;
+            setLocalList(prev => {
+                const updated = {
+                    ...prev,
+                    [category]: (prev[category] || []).filter(item => item !== itemToRemove)
+                };
+                console.log('Updated local list after remove:', updated);
+                return updated;
+            });
+            showToast(`"${itemToRemove}" removed from ${category}`, 'success');
+        } catch (error) {
+            console.error('Error removing item:', error);
+            showToast('Error removing item', 'error');
+        }
     };
 
     const handleResetChanges = () => {
