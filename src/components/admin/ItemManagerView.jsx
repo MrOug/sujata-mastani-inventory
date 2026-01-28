@@ -1,5 +1,5 @@
-import React, { useState, useEffect } from 'react';
-import { Package, Plus, Trash2, Loader, Save } from 'lucide-react';
+import React, { useState, useEffect, useRef } from 'react';
+import { Package, Plus, Trash2, Loader, Save, RotateCcw } from 'lucide-react';
 import { doc, setDoc } from 'firebase/firestore';
 
 const ItemManagerView = ({
@@ -15,9 +15,15 @@ const ItemManagerView = ({
     const [isSaving, setIsSaving] = useState(false);
     const [localList, setLocalList] = useState(masterStockList);
 
+    // Track if user has unsaved local changes - prevents Firestore sync from overwriting
+    const hasLocalChangesRef = useRef(false);
+
     // Sync localList when masterStockList changes from Firestore
+    // Only sync if there are no unsaved local changes
     useEffect(() => {
-        setLocalList(masterStockList);
+        if (!hasLocalChangesRef.current) {
+            setLocalList(masterStockList);
+        }
     }, [masterStockList]);
 
 
@@ -33,6 +39,7 @@ const ItemManagerView = ({
             return;
         }
 
+        hasLocalChangesRef.current = true; // Mark as having local changes
         setLocalList(prev => ({
             ...prev,
             [selectedCategory]: [...(prev[selectedCategory] || []), newItem.trim()]
@@ -42,11 +49,18 @@ const ItemManagerView = ({
     };
 
     const handleRemoveItem = (category, itemToRemove) => {
+        hasLocalChangesRef.current = true; // Mark as having local changes
         setLocalList(prev => ({
             ...prev,
             [category]: (prev[category] || []).filter(item => item !== itemToRemove)
         }));
         showToast(`"${itemToRemove}" removed from ${category}`, 'success');
+    };
+
+    const handleResetChanges = () => {
+        hasLocalChangesRef.current = false;
+        setLocalList(masterStockList);
+        showToast('Changes discarded', 'info');
     };
 
     const handleSaveAll = async () => {
@@ -58,6 +72,7 @@ const ItemManagerView = ({
                 lastUpdated: new Date().toISOString()
             });
 
+            hasLocalChangesRef.current = false; // Reset after successful save
             setMasterStockList(localList);
             showToast('Master stock list saved successfully!', 'success');
         } catch (error) {
@@ -167,18 +182,28 @@ const ItemManagerView = ({
             {/* Save Button */}
             {hasChanges && (
                 <div className="fixed bottom-6 left-1/2 transform -translate-x-1/2 w-full max-w-md px-4 z-50">
-                    <button
-                        onClick={handleSaveAll}
-                        disabled={isSaving}
-                        className="w-full py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-2xl shadow-2xl hover:shadow-orange-500/20 transition-all flex items-center justify-center disabled:opacity-50 ring-4 ring-white"
-                    >
-                        {isSaving ? (
-                            <Loader className="animate-spin w-6 h-6 mr-2" />
-                        ) : (
-                            <Save className="w-6 h-6 mr-2" />
-                        )}
-                        Save All Changes
-                    </button>
+                    <div className="flex gap-2">
+                        <button
+                            onClick={handleResetChanges}
+                            disabled={isSaving}
+                            className="flex-shrink-0 py-4 px-4 bg-gray-500 hover:bg-gray-600 text-white font-bold rounded-2xl shadow-2xl transition-all flex items-center justify-center disabled:opacity-50 ring-4 ring-white"
+                            title="Discard Changes"
+                        >
+                            <RotateCcw className="w-6 h-6" />
+                        </button>
+                        <button
+                            onClick={handleSaveAll}
+                            disabled={isSaving}
+                            className="flex-1 py-4 bg-orange-600 hover:bg-orange-700 text-white font-bold rounded-2xl shadow-2xl hover:shadow-orange-500/20 transition-all flex items-center justify-center disabled:opacity-50 ring-4 ring-white"
+                        >
+                            {isSaving ? (
+                                <Loader className="animate-spin w-6 h-6 mr-2" />
+                            ) : (
+                                <Save className="w-6 h-6 mr-2" />
+                            )}
+                            Save All Changes
+                        </button>
+                    </div>
                 </div>
             )}
         </div>
