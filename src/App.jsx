@@ -142,7 +142,7 @@ function App() {
     // Generate order output text
     const generateOrderOutput = useCallback(() => {
         const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Venkateshwara Hospitality';
-        const areaCode = stores[selectedStoreId]?.areaCode || '';
+        const areaCode = stores[selectedStoreId]?.areaCode || 'Kumar Parisar';
 
         // Auto-fill tomorrow's date (delivery date) in DD/MM/YYYY format
         const tomorrow = new Date();
