@@ -139,65 +139,93 @@ function App() {
         }
     }, [selectedStoreId, selectedDate, currentStock, miscStatus, userId, showToast, fetchStockData]);
 
-    // Generate order output text
+    // Generate order output text - hardcoded template matching exact business format
     const generateOrderOutput = useCallback(() => {
-        const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Venkateshwara Hospitality';
-        const areaCode = stores[selectedStoreId]?.areaCode || 'Kumar Parisar';
-
         // Auto-fill tomorrow's date (delivery date) in DD/MM/YYYY format
         const tomorrow = new Date();
         tomorrow.setDate(tomorrow.getDate() + 1);
         const dateStr = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}/${tomorrow.getFullYear()}`;
 
-        // Header
-        let output = `Firm/Shop Name: ${storeFirmName}\n`;
-        if (areaCode) {
-            output += `Area: ${areaCode}\n`;
-        }
-        output += `Date : ${dateStr}\n\n`;
-
-        // Category display names and item suffix mapping
-        const categoryConfig = {
-            'MILKSHAKE': { displayName: 'MILKSHAKE', suffix: 'fm-' },
-            'ICE CREAM': { displayName: 'ICE CREAM', suffix: '-' },
-            'TOPPINGS': { displayName: 'TOPPINGS', suffix: '-' },
-            'ICE CREAM DABBE': { displayName: 'PACKAGING MATERIAL', suffix: '-' },
-            'MISC': { displayName: null, suffix: '-' }  // Skip MISC in output
+        // Helper: get quantity for a key, return empty string if 0
+        const q = (category, item) => {
+            const qty = orderQuantities[`${category}-${item}`] || 0;
+            return qty > 0 ? ` ${qty}` : '';
         };
 
-        // Process each category
-        CATEGORY_ORDER.forEach(category => {
-            const items = masterStockList[category] || [];
-            const config = categoryConfig[category] || { displayName: category, suffix: '-' };
+        const output = `Firm/Shop Name: Venkateshwara Hospitality 
+Area: Kumar Parisar 
+Date : ${dateStr}
 
-            if (!config.displayName) return; // Skip categories with null displayName (e.g., MISC)
-            if (items.length === 0) return; // Skip empty categories
 
-            // Category header
-            output += `\n ${config.displayName} \n`;
+ MILKSHAKE 
+Mango fm-${q('MILKSHAKE','Mango')} 
+Pista fm-${q('MILKSHAKE','Pista')}
+Pineapple fm-${q('MILKSHAKE','Pineapple')} 
+Rose fm-${q('MILKSHAKE','Rose')}
+Orange fm-${q('MILKSHAKE','Orange')} 
+Vanilla fm -${q('MILKSHAKE','Vanilla')}
+Kesar fm-${q('MILKSHAKE','Kesar')}
+Chocolate fm -${q('MILKSHAKE','Chocolate')} 
+Strawberry fm -${q('MILKSHAKE','Strawberry')}
+Butter Scotch fm -${q('MILKSHAKE','Butter Scotch')}
+Kesar Mango fm -${q('MILKSHAKE','Kesar Mango')} 
+Fresh Sitaphal fm -${q('MILKSHAKE','Fresh Sitaphal')}
+Fresh Strawberry fm -${q('MILKSHAKE','Fresh Strawberry')}
+Fresh Pink Peru fm-${q('MILKSHAKE','Fresh Pink Peru')} 
 
-            // Each item on its own line
-            items.forEach((item, index) => {
-                const key = `${category}-${item}`;
-                const qty = orderQuantities[key] || 0;
 
-                // Add blank line before "Ice Cream Empty Dabe" to separate it
-                if (item === 'Ice Cream Empty Dabe') {
-                    output += `\n`;
-                }
+ ICE CREAM
+Mango -${q('ICE CREAM','Mango')} 
+Pista -${q('ICE CREAM','Pista')}  
+Pineapple -${q('ICE CREAM','Pineapple')}
+Rose -${q('ICE CREAM','Rose')}
+Vanilla -${q('ICE CREAM','Vanilla')}
+Orange-${q('ICE CREAM','Orange')}
+Keshar Pista -${q('ICE CREAM','Keshar Pista')} 
+Chocolate -${q('ICE CREAM','Chocolate')} 
+Strawberry -${q('ICE CREAM','Strawberry')} 
+Butter Scotch -${q('ICE CREAM','Butter Scotch')}
+Dry Anjir -${q('ICE CREAM','Dry Anjir')}
+Coffee Chips -${q('ICE CREAM','Coffee Chips')}
+Chocolate Fudge Badam -${q('ICE CREAM','Chocolate Fudge Badam')} 
+Chocolate Choco Chips -${q('ICE CREAM','Chocolate Choco Chips')} 
+Royal Treat -${q('ICE CREAM','Royal Treat')}
+Kaju Draksha -${q('ICE CREAM','Kaju Draksha')} 
+Lichi -${q('ICE CREAM','Lichi')}
+Jardalu -${q('ICE CREAM','Jardalu')} 
+V.O.P. -${q('ICE CREAM','V.O.P.')}
+Gulkand Badam -${q('ICE CREAM','Gulkand Badam')} 
+Fresh Mango Bites -${q('ICE CREAM','Fresh Mango Bites')}
+Tender Coconut -${q('ICE CREAM','Tender Coconut')}
+Fresh Sitaphal -${q('ICE CREAM','Fresh Sitaphal')}
+Fresh Strawberry -${q('ICE CREAM','Fresh Strawberry')}
+Fresh Pink Peru -${q('ICE CREAM','Fresh Pink Peru')}
 
-                if (qty > 0) {
-                    output += `${item} ${config.suffix} ${qty}\n`;
-                } else {
-                    output += `${item} ${config.suffix}\n`;
-                }
-            });
 
-            output += `\n`; // Blank line after category
-        });
+ TOPPINGS 
+Dry Fruit Pack-${q('TOPPINGS','Dry Fruit Pack')} 
+Pista Pack -${q('TOPPINGS','Pista Pack')} 
+Badam Pack -${q('TOPPINGS','Badam Pack')} 
+Pista Powder -${q('TOPPINGS','Pista Powder')} 
+Cherry Tin-${q('TOPPINGS','Cherry Tin')}
 
-        return output.trim();
-    }, [stores, selectedStoreId, masterStockList, orderQuantities, selectedMiscItems]);
+
+PACKAGING MATERIAL
+Glass Box Big -${q('ICE CREAM DABBE','Glass Box Big')}
+Glass Box Small-${q('ICE CREAM DABBE','Glass Box Small')}
+Icecream cup -${q('ICE CREAM DABBE','Icecream cup')}
+Big Glass Lid Box -${q('ICE CREAM DABBE','Big Glass Lid Box')}
+Small Glass Lid Box -${q('ICE CREAM DABBE','Small Glass Lid Box')}
+Icecream cup lid Box-${q('ICE CREAM DABBE','Icecream cup lid Box')}
+Cone Box -${q('ICE CREAM DABBE','Cone Box')}
+Paper Straw -${q('ICE CREAM DABBE','Paper Straw')}
+Paper napkin -${q('ICE CREAM DABBE','Paper napkin')}
+500 ml Container -${q('ICE CREAM DABBE','500 ml Container')}
+
+Ice Cream Empty Dabe -${q('ICE CREAM DABBE','Ice Cream Empty Dabe')}`;
+
+        return output;
+    }, [orderQuantities]);
 
     // Export stock data
     const exportStockData = useCallback(async () => {
