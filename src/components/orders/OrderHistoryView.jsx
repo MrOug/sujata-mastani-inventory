@@ -1,5 +1,5 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Loader, List as ListIcon, FileText } from 'lucide-react';
+import { ShoppingCart, Loader, List as ListIcon, FileText, History } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
 import Modal from '../Modal';
 
