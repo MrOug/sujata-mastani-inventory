@@ -39,11 +39,29 @@ export const StoreProvider = ({ children }) => {
 
     // Master stock list
     const [masterStockList, setMasterStockList] = useState({
-        MILKSHAKE: ['Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch', 'Kesar mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)'],
-        'ICE CREAM': ['Mango', 'Pista', 'Pineapple', 'Vanilla', 'Rose', 'Orange', 'Keshar Pista', 'Chocolate', 'Strawberry', 'Butterscotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam', 'Chocolate Choco Chips', 'Kaju Draksha', 'Gulkand Badam', 'Jagdalu', 'VOP', 'Peru', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Mango Bites'],
-        TOPPINGS: ['Dry Fruit', 'Pista', 'Badam', 'Pista Powder', 'Cherry'],
-        'ICE CREAM DABBE': ['Ice Cream Dabee'],
-        MISC: ['Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container']
+        MILKSHAKE: [
+            'Mango', 'Pista', 'Pineapple', 'Rose', 'Orange', 'Vanilla', 'Kesar',
+            'Chocolate', 'Strawberry', 'Butter Scotch', 'Kesar Mango',
+            'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
+        ],
+        'ICE CREAM': [
+            'Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange',
+            'Keshar Pista', 'Chocolate', 'Strawberry', 'Butter Scotch',
+            'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam',
+            'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha', 'Lichi',
+            'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites',
+            'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
+        ],
+        TOPPINGS: [
+            'Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'
+        ],
+        'ICE CREAM DABBE': [
+            'Glass Box Big', 'Glass Box Small', 'Icecream cup',
+            'Big Glass Lid Box', 'Small Glass Lid Box', 'Icecream cup lid Box',
+            'Cone Box', 'Paper Straw', 'Paper napkin', '500 ml Container',
+            'Ice Cream Empty Dabe'
+        ],
+        MISC: []
     });
 
     // MISC status tracking

@@ -177,15 +177,18 @@ function App() {
             output += `\n ${config.displayName} \n`;
 
             // Each item on its own line
-            items.forEach(item => {
+            items.forEach((item, index) => {
                 const key = `${category}-${item}`;
                 const qty = orderQuantities[key] || 0;
 
+                // Add blank line before "Ice Cream Empty Dabe" to separate it
+                if (item === 'Ice Cream Empty Dabe') {
+                    output += `\n`;
+                }
+
                 if (qty > 0) {
-                    // Ordered item: show "ItemName fm- Quantity" or "ItemName - Quantity"
                     output += `${item} ${config.suffix} ${qty}\n`;
                 } else {
-                    // Not ordered: show "ItemName fm-" or "ItemName -"
                     output += `${item} ${config.suffix}\n`;
                 }
             });
