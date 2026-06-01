@@ -141,19 +141,40 @@ function App() {
 
     // Generate order output text
     const generateOrderOutput = useCallback(() => {
-        const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Store';
+        const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Venkateshwara Hospitality';
         const areaCode = stores[selectedStoreId]?.areaCode || '';
 
-        let output = `${storeFirmName}\n\n`;
+        // Auto-fill tomorrow's date (delivery date) in DD/MM/YYYY format
+        const tomorrow = new Date();
+        tomorrow.setDate(tomorrow.getDate() + 1);
+        const dateStr = `${String(tomorrow.getDate()).padStart(2, '0')}/${String(tomorrow.getMonth() + 1).padStart(2, '0')}/${tomorrow.getFullYear()}`;
 
-        // Process each category (except MISC which is handled separately)
+        // Header
+        let output = `Firm/Shop Name: ${storeFirmName}\n`;
+        if (areaCode) {
+            output += `Area: ${areaCode}\n`;
+        }
+        output += `Date : ${dateStr}\n\n`;
+
+        // Category display names and item suffix mapping
+        const categoryConfig = {
+            'MILKSHAKE': { displayName: 'MILKSHAKE', suffix: 'fm-' },
+            'ICE CREAM': { displayName: 'ICE CREAM', suffix: '-' },
+            'TOPPINGS': { displayName: 'TOPPINGS', suffix: '-' },
+            'ICE CREAM DABBE': { displayName: 'PACKAGING MATERIAL', suffix: '-' },
+            'MISC': { displayName: null, suffix: '-' }  // Skip MISC in output
+        };
+
+        // Process each category
         CATEGORY_ORDER.forEach(category => {
             const items = masterStockList[category] || [];
-            if (category === 'MISC') return; // Skip MISC for now
+            const config = categoryConfig[category] || { displayName: category, suffix: '-' };
+
+            if (!config.displayName) return; // Skip categories with null displayName (e.g., MISC)
             if (items.length === 0) return; // Skip empty categories
 
-            // Category header (bold for WhatsApp)
-            output += `*${category}*\n\n`;
+            // Category header
+            output += `\n ${config.displayName} \n`;
 
             // Each item on its own line
             items.forEach(item => {
@@ -161,21 +182,18 @@ function App() {
                 const qty = orderQuantities[key] || 0;
 
                 if (qty > 0) {
-                    // Ordered item: show "ItemName - Quantity"
-                    output += `${item} - ${qty}\n`;
+                    // Ordered item: show "ItemName fm- Quantity" or "ItemName - Quantity"
+                    output += `${item} ${config.suffix} ${qty}\n`;
                 } else {
-                    // Not ordered: show "ItemName -"
-                    output += `${item} -\n`;
+                    // Not ordered: show "ItemName fm-" or "ItemName -"
+                    output += `${item} ${config.suffix}\n`;
                 }
             });
 
             output += `\n`; // Blank line after category
         });
 
-        // Add location/area code at the end
-        output += `\n\n${areaCode}`;
-
-        return output;
+        return output.trim();
     }, [stores, selectedStoreId, masterStockList, orderQuantities, selectedMiscItems]);
 
     // Export stock data
