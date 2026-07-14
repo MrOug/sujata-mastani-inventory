@@ -1,7 +1,6 @@
 import React from 'react';
 import { TrendingDown } from 'lucide-react';
-
-const getTodayDate = () => new Date().toISOString().slice(0, 10);
+import { getTodayDate } from '../../utils/date-utils';
 
 /**
  * Stock Sold Report View
@@ -13,7 +12,7 @@ const StockSoldView = ({
     calculateSold,
     soldStockSummary,
     masterStockList,
-    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     return (
         <div className="space-y-6">

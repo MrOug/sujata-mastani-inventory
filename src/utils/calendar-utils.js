@@ -1,4 +1,11 @@
 // Calendar and date utility functions
+// Now integrated with Panchang API for tithi data
+
+import { getNextDayCalendarInfo, checkSpecialDay, getPanchangData, fetchIndianHolidays } from './panchang-utils';
+import { formatDateLocal } from './date-utils';
+
+// Re-export panchang functions for convenience
+export { getNextDayCalendarInfo, checkSpecialDay, getPanchangData, fetchIndianHolidays };
 
 /**
  * Get the next day's date
@@ -133,7 +140,8 @@ export const isWeekend = (date) => {
 };
 
 /**
- * Get a formatted string for next day info
+ * Get a formatted string for next day info (sync version)
+ * Now includes panchang data from mhah-panchang library
  */
 export const getNextDayInfo = () => {
     const nextDay = getNextDay();
@@ -141,14 +149,23 @@ export const getNextDayInfo = () => {
     const dateStr = formatDate(nextDay);
     const holidays = getHolidaysForDate(nextDay);
     const weekend = isWeekend(nextDay);
-    
+
+    // Get panchang info from the API
+    const specialDay = checkSpecialDay(nextDay);
+
     return {
         date: nextDay,
         dateStr,
         dayName,
         holidays,
         isWeekend: weekend,
-        isSpecialDay: holidays.length > 0 || weekend
+        isSpecialDay: holidays.length > 0 || weekend || specialDay.hasSpecialEvent,
+        panchang: specialDay.panchang,
+        tithiEvents: specialDay.events,
+        isChaturthi: specialDay.panchang?.isChaturthi || false,
+        isEkadashi: specialDay.panchang?.isEkadashi || false,
+        isPurnima: specialDay.panchang?.isPurnima || false,
+        isAmavasya: specialDay.panchang?.isAmavasya || false
     };
 };
 

@@ -1,6 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { ClipboardCheck, Check, X, Loader, Save, Package, AlertTriangle, CheckCircle2, XCircle } from 'lucide-react';
 import { doc, setDoc, collection, getDocs, query, where } from 'firebase/firestore';
+import { getTodayDate } from '../../utils/date-utils';
 
 const VerifyStockView = ({
     db,
@@ -9,7 +10,7 @@ const VerifyStockView = ({
     stores,
     showToast,
     masterStockList,
-    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);
@@ -17,8 +18,8 @@ const VerifyStockView = ({
     const [verificationData, setVerificationData] = useState({});
     const [existingVerification, setExistingVerification] = useState(null);
 
-    // Get today's date in ISO format (YYYY-MM-DD)
-    const getTodayDate = () => new Date().toISOString().slice(0, 10);
+    // Get today's date in YYYY-MM-DD format
+    const today = getTodayDate();
 
     // Fetch orders scheduled for delivery today
     useEffect(() => {
@@ -30,7 +31,7 @@ const VerifyStockView = ({
 
             setLoading(true);
             try {
-                const todayDate = getTodayDate();
+                const todayDate = today;
                 const ordersColRef = collection(db, `artifacts/${appId}/public/data/orders`);
                 const ordersSnapshot = await getDocs(ordersColRef);
 
@@ -98,7 +99,7 @@ const VerifyStockView = ({
 
     // Update received quantity
     const handleReceivedChange = (key, value) => {
-        const numValue = parseInt(value) || 0;
+        const numValue = parseFloat(value) || 0;
         setVerificationData(prev => ({
             ...prev,
             [key]: {
@@ -132,7 +133,7 @@ const VerifyStockView = ({
 
         setSaving(true);
         try {
-            const todayDate = getTodayDate();
+            const todayDate = today;
             const verifyDocRef = doc(db, `artifacts/${appId}/public/data/stock_verifications`, `${selectedStoreId}-${todayDate}`);
 
             // Calculate totals

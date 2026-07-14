@@ -1,9 +1,11 @@
 import React from 'react';
 import { Minus, Plus } from 'lucide-react';
 
-const StockInput = ({ label, value, onChange, category, item }) => {
-  const handleIncrement = () => onChange(Math.min((value || 0) + 1, 1000));
-  const handleDecrement = () => onChange(Math.max((value || 0) - 1, 0));
+const StockInput = ({ label, value, onChange }) => {
+  const currentValue = value || 0;
+
+  const handleIncrement = () => onChange(Math.min(parseFloat((currentValue + 1).toFixed(2)), 1000));
+  const handleDecrement = () => onChange(Math.max(parseFloat((currentValue - 1).toFixed(2)), 0));
 
   return (
     <div className="flex items-center justify-between p-3 bg-gray-50 rounded-lg border border-gray-200 hover:border-orange-300 transition-colors">
@@ -20,11 +22,15 @@ const StockInput = ({ label, value, onChange, category, item }) => {
         <input
           type="number"
           inputMode="decimal"
-          step="0.01"
-          value={value === 0 || value === '' ? '' : value}
+          step="any"
+          value={currentValue === 0 ? '' : currentValue}
           onChange={(e) => {
             const inputVal = e.target.value;
-            if (inputVal === '' || inputVal === '-') {
+            if (inputVal === '' || inputVal === '.') {
+              if (inputVal === '.') {
+                // Allow typing a leading dot - don't update value yet, let the browser handle it
+                return;
+              }
               onChange(0);
               return;
             }

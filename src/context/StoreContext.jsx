@@ -1,7 +1,8 @@
-import React, { createContext, useContext, useState, useEffect, useCallback, useMemo } from 'react';
+import React, { createContext, useContext, useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { doc, getDoc, setDoc, collection, onSnapshot, getDocs } from 'firebase/firestore';
 import { db, appId } from '../services/firebase';
 import { useAuth } from './AuthContext';
+import { getTodayDate, getYesterdayDate, formatDateLocal } from '../utils/date-utils';
 
 const StoreContext = createContext(null);
 
@@ -11,14 +12,6 @@ export const useStore = () => {
         throw new Error('useStore must be used within a StoreProvider');
     }
     return context;
-};
-
-// Utility functions
-const getTodayDate = () => new Date().toISOString().slice(0, 10);
-const getYesterdayDate = () => {
-    const d = new Date();
-    d.setDate(d.getDate() - 1);
-    return d.toISOString().slice(0, 10);
 };
 
 export const StoreProvider = ({ children }) => {
@@ -37,22 +30,41 @@ export const StoreProvider = ({ children }) => {
     const [selectedDate, setSelectedDate] = useState(getTodayDate());
     const [loadingData, setLoadingData] = useState(false);
 
-    // Master stock list
+    // Master stock list - matches WhatsApp order format
     const [masterStockList, setMasterStockList] = useState({
-        'ICE CREAM': ['Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange', 'Keshar Pista', 'Chocolate', 'Strawberry', 'Butter Scotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam', 'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha', 'Lichi', 'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites', 'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'],
-        MILKSHAKE: ['Mango fm', 'Pista fm', 'Pineapple fm', 'Rose fm', 'Orange fm', 'Vanilla fm', 'Kesar fm', 'Chocolate fm', 'Strawberry fm', 'Butter Scotch fm', 'Kesar Mango fm', 'Fresh Sitaphal fm', 'Fresh Strawberry fm', 'Fresh Pink Peru fm'],
-        'PACKAGING MATERIAL': ['Glass Box Big', 'Glass Box Small', 'Icecream cup', 'Big Glass Lid Box', 'Small Glass Lid Box', 'Icecream cup lid Box', 'Cone Box', 'Paper Straw', 'Paper napkin', '500 ml Container'],
-        TOPPINGS: ['Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'],
+        MILKSHAKE: [
+            'Mango', 'Pista', 'Pineapple', 'Rose', 'Orange', 'Vanilla', 'Kesar',
+            'Chocolate', 'Strawberry', 'Butter Scotch', 'Kesar Mango',
+            'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
+        ],
+        'ICE CREAM': [
+            'Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange', 'Keshar Pista',
+            'Chocolate', 'Strawberry', 'Butter Scotch', 'Dry Anjir', 'Coffee Chips',
+            'Chocolate Fudge Badam', 'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha',
+            'Lichi', 'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites',
+            'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
+        ],
+        TOPPINGS: [
+            'Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'
+        ],
         'ICE CREAM DABBE': ['Ice Cream Empty Dabe'],
-        MISC: ['Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container']
+        MISC: [
+            'Glass Box Big', 'Glass Box Small', 'Icecream cup', 'Big Glass Lid Box',
+            'Small Glass Lid Box', 'Icecream cup lid Box', 'Cone Box',
+            'Paper Straw', 'Paper napkin', '500 ml Container'
+        ]
     });
 
     // MISC status tracking
     const [miscStatus, setMiscStatus] = useState({});
     const [selectedMiscItems, setSelectedMiscItems] = useState({});
 
+    // Active/Inactive items for stock entry (per store)
+    // Key format: "CATEGORY-ItemName", value: true (active) or false (inactive)
+    const [activeItems, setActiveItems] = useState({});
+
     // Category order
-    const CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
+    const CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
 
     // Get empty stock template
     const getEmptyStock = useCallback(() => {
@@ -148,6 +160,9 @@ export const StoreProvider = ({ children }) => {
         return () => unsubscribeStores();
     }, [db, appId, isAuthReady, userId, role]);
 
+    // Ref to hold initial list for creating if doesn't exist (avoids dependency cycle)
+    const initialListRef = useRef(masterStockList);
+
     // Fetch master stock list
     useEffect(() => {
         if (!db || !isAuthReady || !userId) return;
@@ -164,7 +179,7 @@ export const StoreProvider = ({ children }) => {
             } else {
                 // Create initial list if doesn't exist
                 setDoc(listDocRef, {
-                    list: masterStockList,
+                    list: initialListRef.current,
                     lastUpdated: new Date().toISOString()
                 }).catch(console.error);
             }
@@ -193,6 +208,62 @@ export const StoreProvider = ({ children }) => {
             });
         }
     }, [masterStockList]);
+
+    // Fetch active items for a store
+    const fetchActiveItems = useCallback(async (storeId) => {
+        if (!db || !storeId) return;
+
+        try {
+            const activeDocRef = doc(db, `artifacts/${appId}/public/data/store_active_items`, storeId);
+            const activeSnap = await getDoc(activeDocRef);
+
+            if (activeSnap.exists()) {
+                setActiveItems(activeSnap.data().items || {});
+            } else {
+                // Default: all items active
+                setActiveItems({});
+            }
+        } catch (error) {
+            console.error('Error fetching active items:', error);
+            setActiveItems({});
+        }
+    }, [db, appId]);
+
+    // Save active items for a store
+    const saveActiveItems = useCallback(async (storeId, items) => {
+        if (!db || !storeId) return;
+
+        try {
+            const activeDocRef = doc(db, `artifacts/${appId}/public/data/store_active_items`, storeId);
+            await setDoc(activeDocRef, {
+                items,
+                updatedAt: new Date().toISOString()
+            });
+        } catch (error) {
+            console.error('Error saving active items:', error);
+        }
+    }, [db, appId]);
+
+    // Toggle item active status
+    const toggleItemActive = useCallback((category, item) => {
+        const key = `${category}-${item}`;
+        setActiveItems(prev => {
+            const newItems = { ...prev };
+            // If not set, default is active (true), so toggling makes it inactive (false)
+            newItems[key] = prev[key] === false ? true : false;
+            // Save to Firestore
+            if (selectedStoreId) {
+                saveActiveItems(selectedStoreId, newItems);
+            }
+            return newItems;
+        });
+    }, [selectedStoreId, saveActiveItems]);
+
+    // Check if item is active (default is active if not set)
+    const isItemActive = useCallback((category, item) => {
+        const key = `${category}-${item}`;
+        return activeItems[key] !== false; // Default to active
+    }, [activeItems]);
 
     // Fetch stock data for a store
     const fetchStockData = useCallback(async (storeId) => {
@@ -230,7 +301,7 @@ export const StoreProvider = ({ children }) => {
             ordersSnapshot.forEach(docSnap => {
                 const data = docSnap.data();
                 if (data.storeId === storeId) {
-                    const orderDate = new Date(data.orderDate).toISOString().slice(0, 10);
+                    const orderDate = formatDateLocal(new Date(data.orderDate));
                     if (orderDate === yesterdayDate && data.orderQuantities) {
                         // Aggregate all orders from yesterday
                         Object.entries(data.orderQuantities).forEach(([key, qty]) => {
@@ -241,16 +312,25 @@ export const StoreProvider = ({ children }) => {
             });
             setYesterdayOrderedStock(yesterdayOrders);
 
+            // Also fetch active items for this store
+            await fetchActiveItems(storeId);
+
         } catch (e) {
             console.error("Error fetching stock data:", e);
         } finally {
             setLoadingData(false);
         }
-    }, [db, appId]);
+    }, [db, appId, fetchActiveItems]);
 
     // Re-fetch data when store changes
     useEffect(() => {
+        // For staff, always force their assigned store
         if (role === 'staff' && userStoreId && selectedStoreId !== userStoreId) {
+            setSelectedStoreId(userStoreId);
+        }
+
+        // For admin (or any role), auto-select their assigned store if no store is selected yet
+        if (role === 'admin' && userStoreId && !selectedStoreId) {
             setSelectedStoreId(userStoreId);
         }
 
@@ -296,6 +376,11 @@ export const StoreProvider = ({ children }) => {
         selectedMiscItems,
         setSelectedMiscItems,
 
+        // Active/Inactive items
+        activeItems,
+        toggleItemActive,
+        isItemActive,
+
         // Utilities
         getEmptyStock,
         getEmptyMiscStatus,
@@ -307,8 +392,9 @@ export const StoreProvider = ({ children }) => {
     }), [
         stores, storesLoaded, selectedStoreId,
         currentStock, yesterdayStock, yesterdayOrderedStock, orderQuantities, selectedDate, loadingData,
-        masterStockList, miscStatus, selectedMiscItems,
-        getEmptyStock, getEmptyMiscStatus, calculateSold, soldStockSummary, fetchStockData
+        masterStockList, miscStatus, selectedMiscItems, activeItems,
+        getEmptyStock, getEmptyMiscStatus, calculateSold, soldStockSummary, fetchStockData,
+        toggleItemActive, isItemActive
     ]);
 
     return (

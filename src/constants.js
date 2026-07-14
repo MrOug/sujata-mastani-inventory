@@ -2,33 +2,30 @@
 
 export const INITIAL_STOCK_LIST = {
   MILKSHAKE: [
-    'Mango', 'Rose', 'Pineapple', 'Khus', 'Vanilla', 'Kesar', 'Chocolate', 'Butterscotch',
-    'Kesar Mango', 'Strawberry', 'Fresh Sitaphal (Seasonal)', 'Fresh Strawberry (Seasonal)',
+    'Mango', 'Pista', 'Pineapple', 'Rose', 'Orange', 'Vanilla', 'Kesar',
+    'Chocolate', 'Strawberry', 'Butter Scotch', 'Kesar Mango',
+    'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
   ],
   'ICE CREAM': [
-    'Mango', 'Pista', 'Pineapple', 'Vanilla', 'Rose', 'Orange', 'Keshar Pista', 'Chocolate',
-    'Strawberry', 'Butterscotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam',
-    'Chocolate Choco Chips', 'Kaju Draksha', 'Gulkand', 'Jagdalu', 'VOP', 'Peru',
-    'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Mango Bites',
+    'Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange', 'Keshar Pista',
+    'Chocolate', 'Strawberry', 'Butter Scotch', 'Dry Anjir', 'Coffee Chips',
+    'Chocolate Fudge Badam', 'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha',
+    'Lichi', 'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites',
+    'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
   ],
   TOPPINGS: [
-    'Dry Fruit', 'Pista', 'Badam', 'Pista Powder', 'Cherry'
+    'Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'
   ],
+  'ICE CREAM DABBE': ['Ice Cream Empty Dabe'],
   MISC: [
-    'Ice Cream Dabee', 'Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container'
+    'Glass Box Big', 'Glass Box Small', 'Icecream cup', 'Big Glass Lid Box',
+    'Small Glass Lid Box', 'Icecream cup lid Box', 'Cone Box',
+    'Paper Straw', 'Paper napkin', '500 ml Container'
   ]
 };
 
-// Firebase configuration constants
-export const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDZt6n1QSGLq_PyLDYQlayFwMK0Qv7gpmE",
-  authDomain: "sujata-inventory.firebaseapp.com",
-  projectId: "sujata-inventory",
-  storageBucket: "sujata-inventory.firebasestorage.app",
-  messagingSenderId: "527916478889",
-  appId: "1:527916478889:web:7043c7d45087ee452bd4b8",
-  measurementId: "G-BC3JXRWDVH"
-};
+// Firebase configuration is loaded from environment variables in services/firebase.js
+// Do not hardcode sensitive values here
 
 // App configuration constants
 export const APP_CONFIG = {

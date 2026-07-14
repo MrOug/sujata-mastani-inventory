@@ -1,6 +1,7 @@
 import React, { useState, useEffect, useMemo } from 'react';
 import { BarChart2, Loader, Calendar } from 'lucide-react';
 import { collection, getDocs } from 'firebase/firestore';
+import { formatDateLocal } from '../../utils/date-utils';
 
 const OrderStatsView = ({
     db,
@@ -9,7 +10,7 @@ const OrderStatsView = ({
     stores,
     showToast,
     masterStockList,
-    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [loading, setLoading] = useState(true);
     const [orders, setOrders] = useState([]);
@@ -33,7 +34,7 @@ const OrderStatsView = ({
                     const data = doc.data();
                     if (data.storeId === selectedStoreId) {
                         ordersData.push({ id: doc.id, ...data });
-                        const orderDate = new Date(data.orderDate).toISOString().slice(0, 10);
+                        const orderDate = formatDateLocal(new Date(data.orderDate));
                         datesSet.add(orderDate);
                     }
                 });
@@ -61,7 +62,7 @@ const OrderStatsView = ({
         if (!selectedDate || orders.length === 0) return null;
 
         const dateOrders = orders.filter(order => {
-            const orderDate = new Date(order.orderDate).toISOString().slice(0, 10);
+            const orderDate = formatDateLocal(new Date(order.orderDate));
             return orderDate === selectedDate;
         });
 

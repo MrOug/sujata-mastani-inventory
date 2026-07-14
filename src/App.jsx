@@ -3,6 +3,7 @@ import { doc, setDoc, collection, getDocs } from 'firebase/firestore';
 
 // Import services
 import { db, appId, auth } from './services/firebase';
+import { getTodayDate, getDeliveryDate } from './utils/date-utils';
 
 // Import contexts
 import { useAuth } from './context/AuthContext';
@@ -37,7 +38,7 @@ import {
 } from './components';
 
 // --- Global Constants ---
-const CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
+const CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
 
 // --- Main Application ---
 function App() {
@@ -74,6 +75,9 @@ function App() {
         setMiscStatus,
         selectedMiscItems,
         setSelectedMiscItems,
+        activeItems,
+        toggleItemActive,
+        isItemActive,
         getEmptyStock,
         calculateSold,
         soldStockSummary,
@@ -144,33 +148,87 @@ function App() {
         const storeFirmName = stores[selectedStoreId]?.firmName || stores[selectedStoreId]?.name || 'Store';
         const areaCode = stores[selectedStoreId]?.areaCode || '';
 
-        let output = `Firm/Shop Name: ${storeFirmName}\n`;
+        // Get delivery date - business day ends at 6 AM
+        const deliveryDate = getDeliveryDate();
+
+        const dateStr = deliveryDate.toLocaleDateString('en-IN', {
+            day: '2-digit',
+            month: '2-digit',
+            year: 'numeric'
+        });
+
+        // Header - exact format
+        let output = `Firm/Shop Name: ${storeFirmName} \n`;
         output += `Area: ${areaCode}\n`;
-        output += `Date : \n\n\n`;
+        output += `Date : ${dateStr}\n`;
 
-        // Process each category (except MISC which is handled separately)
-        CATEGORY_ORDER.forEach(category => {
-            const items = masterStockList[category] || [];
-            if (category === 'MISC') return; // Skip MISC for now
-            if (items.length === 0) return; // Skip empty categories
+        // --- MILKSHAKE ---
+        output += `\n\n *MILKSHAKE* \n`;
+        const milkshakeItems = masterStockList['MILKSHAKE'] || [];
+        milkshakeItems.forEach(item => {
+            const key = `MILKSHAKE-${item}`;
+            const qty = orderQuantities[key] || 0;
+            if (qty > 0) {
+                output += `${item} fm- ${qty}\n`;
+            } else {
+                output += `${item} fm-\n`;
+            }
+        });
 
-            // Category header
-            output += ` *${category}*\n\n`;
+        // --- ICE CREAM ---
+        output += `\n\n *ICE CREAM*\n`;
+        const iceCreamItems = masterStockList['ICE CREAM'] || [];
+        iceCreamItems.forEach(item => {
+            const key = `ICE CREAM-${item}`;
+            const qty = orderQuantities[key] || 0;
+            if (qty > 0) {
+                output += `${item} - ${qty}\n`;
+            } else {
+                output += `${item} -\n`;
+            }
+        });
 
-            // Each item on its own line
-            items.forEach(item => {
-                const key = `${category}-${item}`;
+        // --- TOPPINGS ---
+        output += `\n\n *TOPPINGS* \n`;
+        const toppingsItems = masterStockList['TOPPINGS'] || [];
+        toppingsItems.forEach(item => {
+            const key = `TOPPINGS-${item}`;
+            const qty = orderQuantities[key] || 0;
+            if (qty > 0) {
+                output += `${item}- ${qty}\n`;
+            } else {
+                output += `${item}-\n`;
+            }
+        });
+
+        // --- PACKAGING MATERIAL ---
+        // Note: WhatsApp renders *text* as bold which adds visual spacing,
+        // so we put items directly after the header newline
+        output += `\n\n*PACKAGING MATERIAL*\n`;
+        const miscItems = masterStockList['MISC'] || [];
+        miscItems.forEach(item => {
+            const key = `MISC-${item}`;
+            const qty = orderQuantities[key] || 0;
+            if (qty > 0) {
+                output += `${item} - ${qty}\n`;
+            } else {
+                output += `${item} -\n`;
+            }
+        });
+
+        // --- Ice Cream Empty Dabe (at the end, after a blank line) ---
+        const dabbeItems = masterStockList['ICE CREAM DABBE'] || [];
+        if (dabbeItems.length > 0) {
+            dabbeItems.forEach(item => {
+                const key = `ICE CREAM DABBE-${item}`;
                 const qty = orderQuantities[key] || 0;
-
                 if (qty > 0) {
-                    output += `${item} - ${qty}\n`;
+                    output += `\n${item} - ${qty}`;
                 } else {
-                    output += `${item} -\n`;
+                    output += `\n${item} -`;
                 }
             });
-
-            output += `\n`; // Blank line after category
-        });
+        }
 
         return output;
     }, [stores, selectedStoreId, masterStockList, orderQuantities, selectedMiscItems]);
@@ -190,7 +248,7 @@ function App() {
             const url = URL.createObjectURL(blob);
             const a = document.createElement('a');
             a.href = url;
-            a.download = `stock-data-${new Date().toISOString().slice(0, 10)}.json`;
+            a.download = `stock-data-${getTodayDate()}.json`;
             a.click();
             URL.revokeObjectURL(url);
 
@@ -265,6 +323,8 @@ function App() {
                         masterStockList={masterStockList}
                         miscStatus={miscStatus}
                         setMiscStatus={setMiscStatus}
+                        isItemActive={isItemActive}
+                        toggleItemActive={toggleItemActive}
                         CATEGORY_ORDER={CATEGORY_ORDER}
                     />
                 );

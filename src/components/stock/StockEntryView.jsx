@@ -1,6 +1,7 @@
-import React from 'react';
-import { List, Loader, Save } from 'lucide-react';
+import React, { useState } from 'react';
+import { List, Loader, Save, Eye, EyeOff, Settings } from 'lucide-react';
 import StockInput from '../StockInput';
+import { getTodayDate } from '../../utils/date-utils';
 
 const StockEntryView = ({
     storeId,
@@ -14,10 +15,12 @@ const StockEntryView = ({
     masterStockList,
     miscStatus,
     setMiscStatus,
-    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    isItemActive,
+    toggleItemActive,
+    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
-    const getTodayDate = () => new Date().toISOString().slice(0, 10);
     const today = getTodayDate();
+    const [editMode, setEditMode] = useState(false); // Toggle to show/hide inactive items control
 
     const totalItems = Object.values(stockData || {}).filter(v => v > 0).length;
     const totalQuantity = Object.values(stockData || {}).reduce((sum, v) => sum + (v || 0), 0);
@@ -34,9 +37,33 @@ const StockEntryView = ({
 
     return (
         <div className="space-y-6">
-            <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center px-1">
-                <List className="w-7 h-7 mr-3 text-orange-600" /> Stock Entry
-            </h2>
+            <div className="flex items-center justify-between px-1">
+                <h2 className="text-2xl font-bold font-display text-gray-900 flex items-center">
+                    <List className="w-7 h-7 mr-3 text-orange-600" /> Stock Entry
+                </h2>
+                {/* Edit Mode Toggle */}
+                <button
+                    onClick={() => setEditMode(!editMode)}
+                    className={`flex items-center gap-2 px-3 py-2 rounded-lg text-sm font-medium transition ${
+                        editMode
+                            ? 'bg-orange-100 text-orange-700 border border-orange-300'
+                            : 'bg-gray-100 text-gray-600 hover:bg-gray-200'
+                    }`}
+                >
+                    <Settings className="w-4 h-4" />
+                    {editMode ? 'Done' : 'Edit Items'}
+                </button>
+            </div>
+
+            {/* Edit Mode Banner */}
+            {editMode && (
+                <div className="bg-orange-50 border border-orange-200 rounded-xl p-4">
+                    <p className="text-sm text-orange-800 font-medium">
+                        <EyeOff className="w-4 h-4 inline mr-2" />
+                        Tap the eye icon to hide/show items in stock entry. Hidden items still appear in orders.
+                    </p>
+                </div>
+            )}
 
             {/* Control Bar */}
             <div className="bg-white p-4 rounded-2xl shadow-sm border border-gray-100 flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
@@ -81,21 +108,56 @@ const StockEntryView = ({
                     const itemsInCategory = masterStockList[category] || [];
                     if (itemsInCategory.length === 0 || category === 'MISC') return null;
 
+                    // Filter items based on active status (unless in edit mode)
+                    const visibleItems = editMode
+                        ? itemsInCategory
+                        : itemsInCategory.filter(item => isItemActive(category, item));
+
+                    // Count active/inactive for category header
+                    const activeCount = itemsInCategory.filter(item => isItemActive(category, item)).length;
+                    const inactiveCount = itemsInCategory.length - activeCount;
+
+                    if (!editMode && visibleItems.length === 0) return null;
+
                     return (
                         <div key={category} className="bg-white p-4 rounded-xl shadow-lg border border-gray-100">
-                            <h3 className="text-lg font-bold text-orange-700 border-b border-orange-200 pb-2 mb-3">{category}</h3>
+                            <div className="flex items-center justify-between border-b border-orange-200 pb-2 mb-3">
+                                <h3 className="text-lg font-bold text-orange-700">{category}</h3>
+                                {editMode && inactiveCount > 0 && (
+                                    <span className="text-xs bg-gray-100 text-gray-600 px-2 py-1 rounded-full">
+                                        {inactiveCount} hidden
+                                    </span>
+                                )}
+                            </div>
                             <div className="space-y-2">
-                                {itemsInCategory.map(item => {
+                                {(editMode ? itemsInCategory : visibleItems).map(item => {
                                     const key = `${category}-${item}`;
+                                    const isActive = isItemActive(category, item);
+
                                     return (
-                                        <StockInput
-                                            key={key}
-                                            label={item}
-                                            value={stockData[key] || 0}
-                                            onChange={(val) => handleQuantityChange(category, item, val)}
-                                            category={category}
-                                            item={item}
-                                        />
+                                        <div key={key} className={`flex items-center gap-2 ${!isActive && editMode ? 'opacity-50' : ''}`}>
+                                            {editMode && (
+                                                <button
+                                                    type="button"
+                                                    onClick={() => toggleItemActive(category, item)}
+                                                    className={`p-2 rounded-lg transition ${
+                                                        isActive
+                                                            ? 'bg-green-100 text-green-600 hover:bg-green-200'
+                                                            : 'bg-gray-100 text-gray-400 hover:bg-gray-200'
+                                                    }`}
+                                                    title={isActive ? 'Click to hide' : 'Click to show'}
+                                                >
+                                                    {isActive ? <Eye className="w-4 h-4" /> : <EyeOff className="w-4 h-4" />}
+                                                </button>
+                                            )}
+                                            <div className="flex-1">
+                                                <StockInput
+                                                    label={item}
+                                                    value={stockData[key] || 0}
+                                                    onChange={(val) => handleQuantityChange(category, item, val)}
+                                                />
+                                            </div>
+                                        </div>
                                     );
                                 })}
                             </div>

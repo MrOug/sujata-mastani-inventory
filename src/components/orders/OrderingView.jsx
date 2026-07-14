@@ -1,7 +1,9 @@
 import React, { useState, useEffect } from 'react';
-import { ShoppingCart, Loader, Copy, Check, Sun, Cloud, AlertTriangle, X } from 'lucide-react';
-import { doc, setDoc, collection } from 'firebase/firestore';
+import { ShoppingCart, Loader, Copy, Check, AlertTriangle, X } from 'lucide-react';
+import { doc, setDoc } from 'firebase/firestore';
 import StockInput from '../StockInput';
+import { copyToClipboard } from '../../utils/clipboard-utils';
+import { formatDateLocal, getDeliveryDate } from '../../utils/date-utils';
 
 const OrderingView = ({
     currentStock,
@@ -17,7 +19,7 @@ const OrderingView = ({
     miscStatus,
     selectedMiscItems,
     setSelectedMiscItems,
-    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [isCopied, setIsCopied] = useState(false);
     const [isSavingOrder, setIsSavingOrder] = useState(false);
@@ -74,9 +76,8 @@ const OrderingView = ({
     const saveOrderToFirestore = async (quantities, output) => {
         if (!db || !selectedStoreId) return;
 
-        const tomorrow = new Date();
-        tomorrow.setDate(tomorrow.getDate() + 1);
-        const deliveryDate = tomorrow.toISOString().slice(0, 10);
+        // Business day ends at 6 AM
+        const deliveryDate = formatDateLocal(getDeliveryDate());
 
         const orderId = `${selectedStoreId}-${Date.now()}`;
         const orderDocRef = doc(db, `artifacts/${appId}/public/data/orders`, orderId);
@@ -109,33 +110,11 @@ const OrderingView = ({
                 // Continue even if save fails
             }
 
-            // Copy to clipboard using modern API
+            // Copy to clipboard
             try {
-                // Try modern Clipboard API first (works on HTTPS and localhost)
-                if (navigator.clipboard && navigator.clipboard.writeText) {
-                    await navigator.clipboard.writeText(output);
-                    showToast('Order saved and copied to clipboard!', 'success');
-                } else {
-                    // Fallback to execCommand for older browsers
-                    const textArea = document.createElement("textarea");
-                    textArea.value = output;
-                    textArea.style.position = 'fixed';
-                    textArea.style.left = '-999999px';
-                    textArea.style.top = '-999999px';
-                    document.body.appendChild(textArea);
-                    textArea.focus();
-                    textArea.select();
-                    const successful = document.execCommand('copy');
-                    document.body.removeChild(textArea);
-
-                    if (successful) {
-                        showToast('Order saved and copied to clipboard!', 'success');
-                    } else {
-                        throw new Error('Copy command failed');
-                    }
-                }
+                await copyToClipboard(output);
+                showToast('Order saved and copied to clipboard!', 'success');
             } catch (copyError) {
-                console.error('Error copying to clipboard:', copyError);
                 showToast('Order saved but failed to copy. Please copy manually from the modal.', 'warning');
             }
 
@@ -175,19 +154,67 @@ const OrderingView = ({
                 <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
                     {/* Day Info Card */}
                     {nextDayInfo && (
-                        <div className={`p-5 rounded-2xl shadow-sm border transition-shadow hover:shadow-md ${nextDayInfo.isWeekend ? 'bg-purple-50 border-purple-100' : 'bg-white border-gray-100'
+                        <div className={`p-5 rounded-2xl shadow-sm border transition-shadow hover:shadow-md ${
+                            nextDayInfo.isChaturthi || nextDayInfo.isPurnima
+                                ? 'bg-orange-50 border-orange-200'
+                                : nextDayInfo.isWeekend
+                                    ? 'bg-purple-50 border-purple-100'
+                                    : 'bg-white border-gray-100'
                             }`}>
                             <div className="flex items-center justify-between">
                                 <div>
                                     <p className="text-sm text-gray-500 font-medium">Tomorrow's Delivery</p>
                                     <p className="text-xl font-bold text-gray-900 mt-1">{nextDayInfo.dayName}</p>
+                                    {/* Tithi Info */}
+                                    {nextDayInfo.panchang?.tithi && (
+                                        <p className="text-xs text-gray-500 mt-0.5">
+                                            {nextDayInfo.panchang.tithi.name} • {nextDayInfo.panchang.tithi.paksha}
+                                        </p>
+                                    )}
                                 </div>
-                                {nextDayInfo.isWeekend && (
-                                    <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full border border-purple-200 uppercase tracking-wider">
-                                        Weekend
-                                    </span>
-                                )}
+                                <div className="flex flex-col gap-1 items-end">
+                                    {nextDayInfo.isWeekend && (
+                                        <span className="px-3 py-1 bg-purple-100 text-purple-700 text-xs font-bold rounded-full border border-purple-200 uppercase tracking-wider">
+                                            Weekend
+                                        </span>
+                                    )}
+                                    {nextDayInfo.isChaturthi && (
+                                        <span className="px-3 py-1 bg-orange-100 text-orange-700 text-xs font-bold rounded-full border border-orange-200 uppercase tracking-wider">
+                                            🙏 Chaturthi
+                                        </span>
+                                    )}
+                                    {nextDayInfo.isPurnima && (
+                                        <span className="px-3 py-1 bg-yellow-100 text-yellow-700 text-xs font-bold rounded-full border border-yellow-200 uppercase tracking-wider">
+                                            🌕 Purnima
+                                        </span>
+                                    )}
+                                    {nextDayInfo.isEkadashi && (
+                                        <span className="px-3 py-1 bg-blue-100 text-blue-700 text-xs font-bold rounded-full border border-blue-200 uppercase tracking-wider">
+                                            Ekadashi
+                                        </span>
+                                    )}
+                                    {nextDayInfo.isAmavasya && (
+                                        <span className="px-3 py-1 bg-gray-100 text-gray-700 text-xs font-bold rounded-full border border-gray-200 uppercase tracking-wider">
+                                            🌑 Amavasya
+                                        </span>
+                                    )}
+                                </div>
                             </div>
+                            {/* Tithi Events */}
+                            {nextDayInfo.tithiEvents?.length > 0 && (
+                                <div className="mt-3 pt-3 border-t border-orange-200/60">
+                                    {nextDayInfo.tithiEvents.map((event, idx) => (
+                                        <div key={idx} className="flex items-center gap-2 text-orange-700 text-sm">
+                                            <span>{event.emoji}</span>
+                                            <span className="font-semibold">{event.name}</span>
+                                            {event.impact === 'high' && (
+                                                <span className="text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full">High Demand</span>
+                                            )}
+                                        </div>
+                                    ))}
+                                </div>
+                            )}
+                            {/* Holidays */}
                             {nextDayInfo.holidays?.length > 0 && (
                                 <div className="mt-3 pt-3 border-t border-gray-200/60">
                                     {nextDayInfo.holidays.map((holiday, idx) => (
@@ -357,18 +384,7 @@ const OrderingView = ({
                             <button
                                 onClick={async () => {
                                     try {
-                                        if (navigator.clipboard && navigator.clipboard.writeText) {
-                                            await navigator.clipboard.writeText(orderOutput);
-                                        } else {
-                                            const textArea = document.createElement("textarea");
-                                            textArea.value = orderOutput;
-                                            textArea.style.position = 'fixed';
-                                            textArea.style.left = '-999999px';
-                                            document.body.appendChild(textArea);
-                                            textArea.select();
-                                            document.execCommand('copy');
-                                            document.body.removeChild(textArea);
-                                        }
+                                        await copyToClipboard(orderOutput);
                                         showToast('Copied to clipboard!', 'success');
                                     } catch (err) {
                                         showToast('Failed to copy', 'error');
