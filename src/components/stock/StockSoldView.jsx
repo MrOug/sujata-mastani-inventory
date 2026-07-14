@@ -13,7 +13,7 @@ const StockSoldView = ({
     calculateSold,
     soldStockSummary,
     masterStockList,
-    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     return (
         <div className="space-y-6">

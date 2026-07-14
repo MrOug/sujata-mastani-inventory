@@ -8,7 +8,7 @@ const ItemManagerView = ({
     masterStockList,
     setMasterStockList,
     showToast,
-    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [newItem, setNewItem] = useState('');
     const [selectedCategory, setSelectedCategory] = useState('MILKSHAKE');

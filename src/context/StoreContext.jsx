@@ -21,32 +21,6 @@ const getYesterdayDate = () => {
     return d.toISOString().slice(0, 10);
 };
 
-const DEFAULT_MASTER_STOCK_LIST = {
-    MILKSHAKE: [
-        'Mango', 'Pista', 'Pineapple', 'Rose', 'Orange', 'Vanilla', 'Kesar',
-        'Chocolate', 'Strawberry', 'Butter Scotch', 'Kesar Mango',
-        'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
-    ],
-    'ICE CREAM': [
-        'Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange',
-        'Keshar Pista', 'Chocolate', 'Strawberry', 'Butter Scotch',
-        'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam',
-        'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha', 'Lichi',
-        'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites',
-        'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'
-    ],
-    TOPPINGS: [
-        'Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'
-    ],
-    'ICE CREAM DABBE': [
-        'Glass Box Big', 'Glass Box Small', 'Icecream cup',
-        'Big Glass Lid Box', 'Small Glass Lid Box', 'Icecream cup lid Box',
-        'Cone Box', 'Paper Straw', 'Paper napkin', '500 ml Container',
-        'Ice Cream Empty Dabe'
-    ],
-    MISC: []
-};
-
 export const StoreProvider = ({ children }) => {
     const { userId, role, userStoreId, isAuthReady } = useAuth();
 
@@ -64,14 +38,21 @@ export const StoreProvider = ({ children }) => {
     const [loadingData, setLoadingData] = useState(false);
 
     // Master stock list
-    const [masterStockList, setMasterStockList] = useState(DEFAULT_MASTER_STOCK_LIST);
+    const [masterStockList, setMasterStockList] = useState({
+        'ICE CREAM': ['Mango', 'Pista', 'Pineapple', 'Rose', 'Vanilla', 'Orange', 'Keshar Pista', 'Chocolate', 'Strawberry', 'Butter Scotch', 'Dry Anjir', 'Coffee Chips', 'Chocolate Fudge Badam', 'Chocolate Choco Chips', 'Royal Treat', 'Kaju Draksha', 'Lichi', 'Jardalu', 'V.O.P.', 'Gulkand Badam', 'Fresh Mango Bites', 'Tender Coconut', 'Fresh Sitaphal', 'Fresh Strawberry', 'Fresh Pink Peru'],
+        MILKSHAKE: ['Mango fm', 'Pista fm', 'Pineapple fm', 'Rose fm', 'Orange fm', 'Vanilla fm', 'Kesar fm', 'Chocolate fm', 'Strawberry fm', 'Butter Scotch fm', 'Kesar Mango fm', 'Fresh Sitaphal fm', 'Fresh Strawberry fm', 'Fresh Pink Peru fm'],
+        'PACKAGING MATERIAL': ['Glass Box Big', 'Glass Box Small', 'Icecream cup', 'Big Glass Lid Box', 'Small Glass Lid Box', 'Icecream cup lid Box', 'Cone Box', 'Paper Straw', 'Paper napkin', '500 ml Container'],
+        TOPPINGS: ['Dry Fruit Pack', 'Pista Pack', 'Badam Pack', 'Pista Powder', 'Cherry Tin'],
+        'ICE CREAM DABBE': ['Ice Cream Empty Dabe'],
+        MISC: ['Ice Cream Spoons', 'Paper Straw', 'Ice Creap Cup', 'Ice Cream Container']
+    });
 
     // MISC status tracking
     const [miscStatus, setMiscStatus] = useState({});
     const [selectedMiscItems, setSelectedMiscItems] = useState({});
 
     // Category order
-    const CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
+    const CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC'];
 
     // Get empty stock template
     const getEmptyStock = useCallback(() => {
@@ -176,17 +157,6 @@ export const StoreProvider = ({ children }) => {
         const unsubscribeList = onSnapshot(listDocRef, (docSnap) => {
             if (docSnap.exists()) {
                 const data = docSnap.data();
-                // Force reset to the updated constant master stock list if we haven't done it yet
-                if (!data.version || data.version < 2) {
-                    console.log('Force updating master stock list to v2');
-                    setDoc(listDocRef, {
-                        list: DEFAULT_MASTER_STOCK_LIST,
-                        lastUpdated: new Date().toISOString(),
-                        version: 2
-                    }).catch(console.error);
-                    return;
-                }
-
                 if (data.list) {
                     console.log('Master stock list updated from Firestore');
                     setMasterStockList(data.list);
@@ -194,9 +164,8 @@ export const StoreProvider = ({ children }) => {
             } else {
                 // Create initial list if doesn't exist
                 setDoc(listDocRef, {
-                    list: DEFAULT_MASTER_STOCK_LIST,
-                    lastUpdated: new Date().toISOString(),
-                    version: 2
+                    list: masterStockList,
+                    lastUpdated: new Date().toISOString()
                 }).catch(console.error);
             }
         }, (error) => {

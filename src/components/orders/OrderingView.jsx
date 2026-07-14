@@ -17,7 +17,7 @@ const OrderingView = ({
     miscStatus,
     selectedMiscItems,
     setSelectedMiscItems,
-    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [isCopied, setIsCopied] = useState(false);
     const [isSavingOrder, setIsSavingOrder] = useState(false);

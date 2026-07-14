@@ -9,7 +9,7 @@ const VerifyStockView = ({
     stores,
     showToast,
     masterStockList,
-    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const [loading, setLoading] = useState(true);
     const [saving, setSaving] = useState(false);

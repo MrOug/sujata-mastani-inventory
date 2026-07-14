@@ -14,7 +14,7 @@ const StockEntryView = ({
     masterStockList,
     miscStatus,
     setMiscStatus,
-    CATEGORY_ORDER = ['MILKSHAKE', 'ICE CREAM', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
+    CATEGORY_ORDER = ['ICE CREAM', 'MILKSHAKE', 'PACKAGING MATERIAL', 'TOPPINGS', 'ICE CREAM DABBE', 'MISC']
 }) => {
     const getTodayDate = () => new Date().toISOString().slice(0, 10);
     const today = getTodayDate();
